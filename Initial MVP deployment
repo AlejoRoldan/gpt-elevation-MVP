@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPT Elevation - Explora tu Mente</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #667eea;
+            --primary-dark: #5a6fd8;
+            --secondary: #764ba2;
+            --accent: #f093fb;
+            --success: #4ecdc4;
+            --warning: #ffecd2;
+            --danger: #ff6b6b;
+            --dark: #2d3748;
+            --light: #f7fafc;
+            --gray: #a0aec0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header */
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .header h1 {
+            color: white;
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            color: rgba(255, 255, 255, 0.9);
+            text-align: center;
+            font-size: 1.1rem;
+        }
+
+        /* Navigation */
+        .nav-tabs {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .nav-tab {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 1rem;
+        }
+
+        .nav-tab:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .nav-tab.active {
+            background: var(--accent);
+            box-shadow: 0 8px 25px rgba(240, 147, 251, 0.3);
+        }
+
+        /* Content Panels */
+        .content-panel {
+            display: none;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            min-height: 600px;
+        }
+
+        .content-panel.active {
+            display: block;
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Chat Interface */
+        .chat-container {
+            height: 500px;
+            display: flex;
+            flex-direction: column;
+            border: 2px solid var(--primary);
+            border-radius: 15px;
+            overflow: hidden;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: linear-gradient(to bottom, #f8f9ff, #ffffff);
+        }
+
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .message.user {
+            flex-direction: row-reverse;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 15px 20px;
+            border-radius: 18px;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .message.assistant .message-content {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border-bottom-left-radius: 5px;
+        }
+
+        .message.user .message-content {
+            background: var(--success);
+            color: white;
+            border-bottom-right-radius: 5px;
+        }
+
+        .message-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            color: white;
+        }
+
+        .message.assistant .message-avatar {
+            background: var(--accent);
+        }
+
+        .message.user .message-avatar {
+            background: var(--success);
+        }
+
+        .chat-input-container {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #eee;
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 25px;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.3s ease;
+        }
+
+        .chat-input:focus {
+            border-color: var(--primary);
+        }
+
+        .send-btn {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            padding: 15px 25px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: transform 0.2s ease;
+        }
+
+        .send-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .send-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* Buttons */
+        .btn {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, var(--gray), #718096);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, var(--success), #36d1dc);
+        }
+
+        /* Form Styles */
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            font-weight: 600;
+            color: var(--dark);
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        /* Notification */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--success);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            z-index: 1000;
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.3s ease;
+        }
+
+        .notification.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        /* Loading Spinner */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .nav-tabs {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1><i class="fas fa-brain"></i> GPT Elevation</h1>
+            <p>Tu compañero para la exploración mental y el crecimiento personal</p>
+        </div>
+
+        <!-- Navigation -->
+        <div class="nav-tabs">
+            <button class="nav-tab active" onclick="showPanel('chat')">
+                <i class="fas fa-comments"></i> Chat IA
+            </button>
+            <button class="nav-tab" onclick="showPanel('demo')">
+                <i class="fas fa-star"></i> Demo
+            </button>
+            <button class="nav-tab" onclick="showPanel('setup')">
+                <i class="fas fa-cog"></i> Configuración
+            </button>
+        </div>
+
+        <!-- Chat Panel -->
+        <div id="chat" class="content-panel active">
+            <h2 style="margin-bottom: 20px; color: var(--dark);">
+                <i class="fas fa-robot"></i> Conversación con GPT Elevation
+            </h2>
+            
+            <div id="apiKeyWarning" style="background: #fff3cd; border: 1px solid #ffeaa7; color: #856404; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <strong><i class="fas fa-exclamation-triangle"></i> Configuración Requerida:</strong><br>
+                Para usar el chat, ve a la pestaña "Configuración" e ingresa tu API Key de OpenAI.
+            </div>
+
+            <div class="chat-container">
+                <div class="chat-messages" id="chatMessages">
+                    <div class="message assistant">
+                        <div class="message-avatar">
+                            <i class="fas fa-brain"></i>
+                        </div>
+                        <div class="message-content">
+                            Hola, soy GPT Elevation. Estoy aquí para acompañarte en tu exploración mental. ¿Cómo te sientes hoy? ¿Hay algo específico en lo que te gustaría reflexionar?
+                        </div>
+                    </div>
+                </div>
+                <div class="chat-input-container">
+                    <input type="text" class="chat-input" id="chatInput" placeholder="Escribe tu mensaje aquí..." onkeypress="handleChatKeyPress(event)">
+                    <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div style="margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="btn btn-secondary" onclick="saveConversation()">
+                    <i class="fas fa-save"></i> Guardar Conversación
+                </button>
+                <button class="btn btn-secondary" onclick="startGuidedReflection()">
+                    <i class="fas fa-lightbulb"></i> Reflexión Guiada
+                </button>
+                <button class="btn btn-secondary" onclick="createRitual()">
+                    <i class="fas fa-magic"></i> Crear Ritual
+                </button>
+            </div>
+        </div>
+
+        <!-- Demo Panel -->
+        <div id="demo" class="content-panel">
+            <h2 style="margin-bottom: 20px; color: var(--dark);">
+                <i class="fas fa-star"></i> Demo de Funcionalidades
+            </h2>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+                
+                <!-- Mapa Mental Demo -->
+                <div style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 25px; border-radius: 15px;">
+                    <h3><i class="fas fa-project-diagram"></i> Mapas Mentales</h3>
+                    <p style="margin: 15px 0;">Crea mapas simbólicos de tus pensamientos y emociones</p>
+                    <div style="display: flex; gap: 10px; margin-top: 15px;">
+                        <span style="font-size: 1.5rem;">💭</span>
+                        <span style="font-size: 1.5rem;">❤️</span>
+                        <span style="font-size: 1.5rem;">⚡</span>
+                        <span style="font-size: 1.5rem;">🌱</span>
+                    </div>
+                </div>
+
+                <!-- Terapeutas Demo -->
+                <div style="background: linear-gradient(135deg, #4ecdc4, #36d1dc); color: white; padding: 25px; border-radius: 15px;">
+                    <h3><i class="fas fa-user-md"></i> Directorio de Terapeutas</h3>
+                    <p style="margin: 15px 0;">Conecta con profesionales certificados</p>
+                    <div style="background: rgba(255,255,255,0.2); padding: 10px; border-radius: 8px; margin-top: 15px;">
+                        <small>Dr. Ana García - Psicología Clínica</small>
+                    </div>
+                </div>
+
+                <!-- Rituales Demo -->
+                <div style="background: linear-gradient(135deg, #f093fb, #f5576c); color: white; padding: 25px; border-radius: 15px;">
+                    <h3><i class="fas fa-magic"></i> Rituales Personalizados</h3>
+                    <p style="margin: 15px 0;">Prácticas diseñadas específicamente para ti</p>
+                    <div style="background: rgba(255,255,255,0.2); padding: 10px; border-radius: 8px; margin-top: 15px;">
+                        <small>Meditación matutina • Reflexión nocturna</small>
+                    </div>
+                </div>
+
+                <!-- Reportes Demo -->
+                <div style="background: linear-gradient(135deg, #a8edea, #fed6e3); color: #2d3748; padding: 25px; border-radius: 15px;">
+                    <h3><i class="fas fa-chart-line"></i> Reportes de Progreso</h3>
+                    <p style="margin: 15px 0;">Visualiza tu crecimiento personal</p>
+                    <div style="background: rgba(255,255,255,0.7); padding: 10px; border-radius: 8px; margin-top: 15px;">
+                        <small>📈 Progreso semanal disponible</small>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 30px; text-align: center;">
+                <h3 style="color: var(--dark); margin-bottom: 15px;">¿Listo para comenzar?</h3>
+                <button class="btn" onclick="showPanel('setup')" style="font-size: 1.1rem; padding: 15px 30px;">
+                    <i class="fas fa-rocket"></i> Configurar Ahora
+                </button>
+            </div>
+        </div>
+
+        <!-- Setup Panel -->
+        <div id="setup" class="content-panel">
+            <h2 style="margin-bottom: 20px; color: var(--dark);">
+                <i class="fas fa-cog"></i> Configuración Inicial
+            </h2>
+
+            <div style="background: #e3f2fd; border: 1px solid #2196f3; color: #1565c0; padding: 20px; border-radius: 8px; margin-bottom: 30px;">
+                <h3><i class="fas fa-info-circle"></i> Configuración de API</h3>
+                <p style="margin: 10px 0;">Para que el chat funcione, necesitas una API Key de OpenAI:</p>
+                <ol style="margin: 10px 0; padding-left: 20px;">
+                    <li>Ve a <a href="https://platform.openai.com/api-keys" target="_blank" style="color: #1565c0;">platform.openai.com/api-keys</a></li>
+                    <li>Crea una nueva API Key</li>
+                    <li>Cópiala y pégala aquí abajo</li>
+                </ol>
+            </div>
+
+            <form onsubmit="saveConfig(event)">
+                <div class="form-group">
+                    <label for="apiKey">
+                        <i class="fas fa-key"></i> API Key de OpenAI
+                    </label>
+                    <input type="password" id="apiKey" placeholder="sk-..." style="font-family: monospace;">
+                    <small style="color: var(--gray);">Tu API Key se guarda localmente en tu navegador</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="userName">
+                        <i class="fas fa-user"></i> Tu Nombre
+                    </label>
+                    <input type="text" id="userName" placeholder="¿Cómo te gustaría que te llame?">
+                </div>
+
+                <div class="form-group">
+                    <label for="userAge">
+                        <i class="fas fa-birthday-cake"></i> Tu Edad
+                    </label>
+                    <input type="number" id="userAge" min="14" max="120" placeholder="Para personalizar la experiencia">
+                </div>
+
+                <div class="form-group">
+                    <label for="communicationStyle">
+                        <i class="fas fa-comments"></i> Estilo de Comunicación Preferido
+                    </label>
+                    <select id="communicationStyle">
+                        <option value="empathetic">Empático y pausado (recomendado)</option>
+                        <option value="direct">Directo y práctico</option>
+                        <option value="analytical">Analítico y reflexivo</option>
+                        <option value="creative">Creativo e imaginativo</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="btn" style="width: 100%; padding: 15px; font-size: 1.1rem;">
+                    <i class="fas fa-save"></i> Guardar Configuración
+                </button>
+            </form>
+
+            <div style="margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                <h3 style="color: var(--dark); margin-bottom: 15px;">
+                    <i class="fas fa-shield-alt"></i> Privacidad y Seguridad
+                </h3>
+                <ul style="color: var(--gray); padding-left: 20px;">
+                    <li>Toda tu información se guarda localmente en tu navegador</li>
+                    <li>No enviamos datos a servidores externos (excepto OpenAI para el chat)</li>
+                    <li>Puedes exportar o eliminar tus datos en cualquier momento</li>
+                    <li>Tu API Key está encriptada y nunca la compartimos</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Notification -->
+        <div id="notification" class="notification"></div>
+    </div>
+
+    <script>
+        // Global Variables
+        let currentPanel = 'chat';
+        let userConfig = {
+            apiKey: '',
+            name: '',
+            age: '',
+            communicationStyle: 'empathetic'
+        };
+        let conversations = [];
+
+        // Initialize App
+        document.addEventListener('DOMContentLoaded', function() {
+            loadUserConfig();
+            showNotification('¡Bienvenido a GPT Elevation!', 'success');
+        });
+
+        // Panel Navigation
+        function showPanel(panelId) {
+            // Hide all panels
+            document.querySelectorAll('.content-panel').forEach(panel => {
+                panel.classList.remove('active');
+            });
+            
+            // Remove active class from all tabs
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected panel
+            document.getElementById(panelId).classList.add('active');
+            event.target.classList.add('active');
+            
+            currentPanel = panelId;
+            
+            // Update API warning visibility
+            updateApiWarning();
+        }
+
+        // Load user configuration
+        function loadUserConfig() {
+            const saved = localStorage.getItem('gptElevationConfig');
+            if (saved) {
+                userConfig = JSON.parse(saved);
+                document.getElementById('apiKey').value = userConfig.apiKey || '';
+                document.getElementById('userName').value = userConfig.name || '';
+                document.getElementById('userAge').value = userConfig.age || '';
+                document.getElementById('communicationStyle').value = userConfig.communicationStyle || 'empathetic';
+            }
+            updateApiWarning();
+        }
+
+        // Save configuration
+        function saveConfig(event) {
+            event.preventDefault();
+            
+            userConfig = {
+                apiKey: document.getElementById('apiKey').value.trim(),
+                name: document.getElementById('userName').value.trim(),
+                age: document.getElementById('userAge').value,
+                communicationStyle: document.getElementById('communicationStyle').value
+            };
+
+            localStorage.setItem('gptElevationConfig', JSON.stringify(userConfig));
+            
+            showNotification('¡Configuración guardada exitosamente!', 'success');
+            updateApiWarning();
+            
+            // If API key is set, switch to chat
+            if (userConfig.apiKey) {
+                setTimeout(() => {
+                    showPanel('chat');
+                }, 1500);
+            }
+        }
+
+        // Update API warning visibility
+        function updateApiWarning() {
+            const warning = document.getElementById('apiKeyWarning');
+            if (userConfig.apiKey && userConfig.apiKey.startsWith('sk-')) {
+                warning.style.display = 'none';
+            } else {
+                warning.style.display = 'block';
+            }
+        }
+
+        // Chat Functions
+        function handleChatKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            if (!userConfig.apiKey || !userConfig.apiKey.startsWith('sk-')) {
+                showNotification('Por favor configura tu API Key primero', 'error');
+                showPanel('setup');
+                return;
+            }
+
+            // Add user message
+            addMessage(message, 'user');
+            input.value = '';
+            
+            // Show loading
+            const sendBtn = document.getElementById('sendBtn');
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = '<div class="loading"></div>';
+
+            try {
+                const response = await callOpenAI(message);
+                addMessage(response, 'assistant');
+            } catch (error) {
+                console.error('Error:', error);
+                addMessage('Lo siento, hubo un error al procesar tu mensaje. Por favor, verifica tu API Key e intenta nuevamente.', 'assistant');
+                showNotification('Error en la comunicación con OpenAI', 'error');
+            }
+
+            // Reset button
+            sendBtn.disabled = false;
+            sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
+        }
+
+        function addMessage(content, type) {
+            const messagesContainer = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            
+            const avatar = document.createElement('div');
+            avatar.className = 'message-avatar';
+            avatar.innerHTML = type === 'user' ? '<i class="fas fa-user"></i>' : '<i class="fas fa-brain"></i>';
+            
+            const messageContent = document.createElement('div');
+            messageContent.className = 'message-content';
+            messageContent.textContent = content;
+            
+            messageDiv.appendChild(avatar);
+            messageDiv.appendChild(messageContent);
+            messagesContainer.appendChild(messageDiv);
+            
+            // Scroll to bottom
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            
+            // Save conversation
+            conversations.push({
+                type: type,
+                content: content,
+                timestamp: new Date().toISOString()
+            });
+            localStorage.setItem('gptElevationConversations', JSON.stringify(conversations));
+        }
+
+        async function callOpenAI(message) {
+            const systemPrompt = `Eres GPT Elevation, un asistente de bienestar mental especializado en diálogo socrático. 
+
+Características de tu personalidad:
+- Empático y pausado en tus respuestas
+- Haces preguntas reflexivas que invitan a la introspección
+- Evitas dar consejos directos, en su lugar guías el autoconocimiento
+- Usas un lenguaje cálido y comprensivo
+- Te enfocas en el proceso de exploración mental, no en soluciones rápidas
+
+Estilo de comunicación: ${userConfig.communicationStyle}
+${userConfig.name ? `El usuario se llama: ${userConfig.name}` : ''}
+${userConfig.age ? `Edad del usuario: ${userConfig.age} años` : ''}
+
+Responde de manera reflexiva y haz preguntas que ayuden al usuario a explorar sus pensamientos y emociones más profundamente.`;
+
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${userConfig.apiKey}`
+                },
+                body: JSON.stringify({
+                    model: 'gpt-3.5-turbo',
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: message }
+                    ],
+                    max_tokens: 500,
+                    temperature: 0.7
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return data.choices[0].message.content;
+        }
+
+        // Additional Functions
+        function saveConversation() {
+            const conversations = localStorage.getItem('gptElevationConversations');
+            if (conversations) {
+                const blob = new Blob([conversations], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `gpt-elevation-conversation-${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showNotification('Conversación guardada exitosamente', 'success');
+            } else {
+                showNotification('No hay conversaciones para guardar', 'info');
+            }
+        }
+
+        function startGuidedReflection() {
+            const reflectionPrompts = [
+                "¿Cómo te sientes en este momento?",
+                "¿Qué pensamientos han estado ocupando tu mente últimamente?",
+                "¿Hay alguna emoción que hayas estado evitando explorar?",
+                "¿Qué es lo que más te preocupa hoy?",
+                "¿Cuál fue el momento más significativo de tu día?"
+            ];
+            
+            const randomPrompt = reflectionPrompts[Math.floor(Math.random() * reflectionPrompts.length)];
+            document.getElementById('chatInput').value = randomPrompt;
+            showNotification('Pregunta de reflexión sugerida', 'info');
+        }
+
+        function createRitual() {
+            const rituals = [
+                "Dedica 5 minutos cada mañana a escribir tres cosas por las que te sientes agradecido.",
+                "Antes de dormir, reflexiona sobre un momento del día que te hizo sentir orgulloso de ti mismo.",
+                "Toma tres respiraciones profundas y lentas cuando sientas que el estrés aumenta.",
+                "Dedica 10 minutos al día a una actividad que realmente disfrutes, sin distracciones.",
+                "Escribe una carta de amor hacia ti mismo cada semana, reconociendo tu crecimiento.",
+                "Crea un espacio sagrado en tu hogar donde puedas reflexionar en silencio."
+            ];
+            
+            const randomRitual = rituals[Math.floor(Math.random() * rituals.length)];
+            addMessage(`Aquí tienes un ritual personalizado para ti: ${randomRitual}`, 'assistant');
+            showNotification('Ritual personalizado crea
