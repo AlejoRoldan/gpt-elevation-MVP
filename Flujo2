@@ -1,0 +1,186 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ]
+      },
+      "id": 1,
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "credentials": {
+        "telegramApi": {
+          "id": "your-telegram-credential-id",
+          "name": "Telegram Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{\n  json: {\n    nombre: $json.message.from.first_name,\n    usuario: $json.message.from.username,\n    mensaje: $json.message.text,\n    chatId: $json.message.chat.id,\n    fecha: new Date().toISOString(),\n  }\n}];"
+      },
+      "name": "Preparar Datos",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "sheetId": "[Tu ID de hoja]",
+        "range": "Respuestas!A:D",
+        "valueInputOption": "USER_ENTERED",
+        "options": {},
+        "data": [
+          [
+            "{{$json[\"nombre\"]}}",
+            "{{$json[\"usuario\"]}}",
+            "{{$json[\"mensaje\"]}}",
+            "{{$json[\"fecha\"]}}"
+          ]
+        ]
+      },
+      "name": "Guardar en Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 1,
+      "position": [650, 200],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "your-google-sheets-credential-id",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": [
+          {
+            "value1": "={{$json[\"mensaje\"]}}",
+            "operation": "equal",
+            "value2": "/start"
+          }
+        ],
+        "continueOnFail": false
+      },
+      "name": "Switch Start",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [650, 400]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{$json[\"chatId\"]}}",
+        "text": "Hola, soy Elevation. Gracias por acercarte. Este espacio es para explorar lo que sientes, lo que vives y lo que sueñas. Escribe cualquier cosa y comenzaré a acompañarte en tu reflexión.\n\nTambién puedes escribir /ayuda para ver los comandos disponibles."
+      },
+      "name": "Enviar Bienvenida",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [850, 350],
+      "credentials": {
+        "telegramApi": {
+          "id": "your-telegram-credential-id",
+          "name": "Telegram Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "gpt-4",
+        "prompt": "Actúa como Elevation, un asistente conversacional diseñado para acompañar procesos de introspección y diálogo interno. Recibes mensajes de personas que desean reflexionar sobre su mundo emocional, su historia y sus decisiones.\n\nTu tono es cálido, sereno, profundo y sin prisa. No das consejos rápidos ni frases cliché. Tu función es acompañar con preguntas poderosas, afirmaciones suaves y reflexiones que invitan al autoanálisis.\n\nSi el usuario saluda (distinto de /start), responde:\n‘Hola, soy Elevation. Gracias por acercarte. Este espacio es para explorar lo que sientes, lo que vives y lo que sueñas. ¿Desde dónde estás llegando hoy?’\n\nSi expresa una emoción o situación, responde con cuidado:\n‘Gracias por compartir eso. ¿Qué crees que esta emoción quiere mostrarte en este momento de tu vida?’\n\nFinaliza cada intervención con una frase que invite a la pausa, como:\n‘Puedes escribir lo que surja, sin corregirlo. A veces, lo que más necesitamos decir aparece cuando dejamos de buscar.’",
+        "temperature": 0.7,
+        "maxTokens": 300
+      },
+      "name": "Elevation AI",
+      "type": "n8n-nodes-base.openai",
+      "typeVersion": 1,
+      "position": [850, 450],
+      "credentials": {
+        "openAiApi": {
+          "id": "your-openai-credential-id",
+          "name": "OpenAI API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{$json[\"chatId\"]}}",
+        "text": "={{$node[\"Elevation AI\"].json[\"text\"]}}"
+      },
+      "name": "Enviar Respuesta",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [1050, 450],
+      "credentials": {
+        "telegramApi": {
+          "id": "your-telegram-credential-id",
+          "name": "Telegram Bot Token"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Preparar Datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Datos": {
+      "main": [
+        [
+          {
+            "node": "Guardar en Sheets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Switch Start",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Start": {
+      "main": [
+        [
+          {
+            "node": "Enviar Bienvenida",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Elevation AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Elevation AI": {
+      "main": [
+        [
+          {
+            "node": "Enviar Respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
