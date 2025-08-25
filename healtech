@@ -1,0 +1,693 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
+import { Download, RefreshCw, Languages, Play, Pause } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  ResponsiveContainer,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  LineChart as RLineChart,
+  Line,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  RadialBarChart,
+  RadialBar,
+  Legend,
+  Brush,
+  ComposedChart,
+} from "recharts";
+
+// ------------------------------------------------------------
+// Itti Care Pulse – React Dashboard (ES/GN/EN)
+// Interactivo: multi-empresa, real vs simulado, rango de fechas 6–24m,
+// idioma en vivo, modo de simulación, control de series, brush/zoom,
+// autoplay de tendencia, export CSV, tabla clicable por áreas.
+// ------------------------------------------------------------
+
+type Lang = "es" | "gn" | "en";
+
+type SimMode = "base" | "conservador" | "acelerado";
+
+type CompanyCfg = {
+  empleados: number;
+  piloto: number;
+  costoDia: number;
+  baseline: number; // % ausentismo
+  byod: number; // % adopción BYOD
+  nps: number;
+  alerts: number;
+};
+
+const COMPANIES: Record<string, CompanyCfg> = {
+  "Banco UENO": { empleados: 1500, piloto: 150, costoDia: 95, baseline: 4.2, byod: 78, nps: 56, alerts: 80 },
+  "Grupo Vázquez — Retail": { empleados: 2600, piloto: 260, costoDia: 70, baseline: 5.1, byod: 68, nps: 52, alerts: 76 },
+  "Grupo Vázquez — Manufactura": { empleados: 900, piloto: 90, costoDia: 60, baseline: 5.8, byod: 55, nps: 49, alerts: 72 },
+};
+
+function rand(min: number, max: number) {
+  return Math.random() * (max - min) + min;
+}
+function clamp(n: number, a: number, b: number) {
+  return Math.max(a, Math.min(b, n));
+}
+
+// últimos 24 meses (YYYY-MM + etiqueta corta)
+function lastMonths(n = 24) {
+  const arr: { key: string; short: string }[] = [];
+  const now = new Date();
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const short = d.toLocaleString("es", { month: "short" });
+    arr.push({ key, short: short.charAt(0).toUpperCase() + short.slice(1, 3) });
+  }
+  return arr;
+}
+
+const MONTHS24 = lastMonths(24);
+
+export default function IttiCarePulseDashboard() {
+  const [lang, setLang] = useState<Lang>("es");
+  const [empresa, setEmpresa] = useState(Object.keys(COMPANIES)[0]);
+  const [area, setArea] = useState("General");
+  const [metaDelta, setMetaDelta] = useState(-20);
+  const [mode, setMode] = useState<SimMode>("base");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [showBaseline, setShowBaseline] = useState(true);
+  const [showMeta, setShowMeta] = useState(true);
+  const [showReal, setShowReal] = useState(true);
+  const [showSim, setShowSim] = useState(true);
+  const [kpiSource, setKpiSource] = useState<"real" | "sim">("sim");
+  const [startIdx, setStartIdx] = useState(24 - 12);
+  const [endIdx, setEndIdx] = useState(23);
+  const [playing, setPlaying] = useState(false);
+  const [selectedRow, setSelectedRow] = useState<number | null>(null);
+
+  // autoplay del rango
+  useEffect(() => {
+    if (!playing) return;
+    const id = setInterval(() => {
+      setStartIdx((s) => {
+        const e = Math.min(23, s + 1);
+        setEndIdx((prev) => (prev < 23 ? prev + 1 : 23));
+        return e;
+      });
+    }, 1200);
+    return () => clearInterval(id);
+  }, [playing]);
+
+  // i18n
+  const T = useMemo(() => {
+    const base = {
+      title: "Itti Care Pulse",
+      subtitle: "Piloto UENO + Grupo Vázquez",
+      export: { es: "Exportar CSV", gn: "Embopy CSV", en: "Export CSV" },
+      refresh: { es: "Refrescar datos", gn: "Mbojevy mba'e", en: "Refresh data" },
+      play: { es: "Reproducir", gn: "Mboheta", en: "Play" },
+      pause: { es: "Pausar", gn: "Pyta", en: "Pause" },
+      kpi_aus: { es: "Ausentismo mensual", gn: "Jejavy (mes)", en: "Monthly absenteeism" },
+      kpi_days: { es: "Días evitados (vs. baseline)", gn: "Ára ojehekýiva (vs. base)", en: "Days avoided (vs. baseline)" },
+      kpi_roi: { es: "ROI mensual estimado", gn: "ROI jasypateĩ", en: "Estimated monthly ROI" },
+      kpi_adop: { es: "Adopción activa", gn: "Jejoko ñemoneĩ", en: "Active adoption" },
+      kpi_nps: { es: "NPS Bienestar", gn: "NPS Tekoporã", en: "Wellbeing NPS" },
+      kpi_alerts: { es: "Alertas resueltas", gn: "Marandu omyendyva", en: "Resolved alerts" },
+      trend_aus: { es: "Tendencia de ausentismo", gn: "Teko’asy rapykuere", en: "Absenteeism trend" },
+      adoption: { es: "Adopción y origen de dispositivos", gn: "Jejoko ha mba’e’oka ypy", en: "Adoption and device origin" },
+      habits: { es: "Hábitos saludables (0–100)", gn: "Tekoporã (0–100)", en: "Healthy habits (0–100)" },
+      biometrics: { es: "HRV (ms) & FC en reposo", gn: "HRV (ms) & FC py’aguapy", en: "HRV (ms) & Resting HR" },
+      sleep: { es: "Sueño útil por noche (horas)", gn: "Keké pyhare (aravo)", en: "Useful sleep per night (h)" },
+      table_title: { es: "Rendimiento por área (top/bottom 8)", gn: "Mba’apohára aty rupi (top/bottom 8)", en: "Performance by department (top/bottom 8)" },
+      filter_empresa: { es: "Empresa", gn: "Empresa", en: "Company" },
+      filter_area: { es: "Área/Unidad", gn: "Aty/Unidad", en: "Department" },
+      filter_goal: { es: "Objetivo de ausentismo (meta)", gn: "Tembiaporã (meta)", en: "Absenteeism target (goal)" },
+      filter_mode: { es: "Modo de simulación", gn: "Mba’apo ñemyesakã", en: "Simulation mode" },
+      consent: { es: "Consentimiento: OPT-in granular", gn: "Ñemoneĩ: OPT-in granular", en: "Consent: OPT-in granular" },
+      series: { es: "Series", gn: "Série", en: "Series" },
+      baseline: { es: "Baseline", gn: "Base", en: "Baseline" },
+      real: { es: "Real", gn: "Añetegua", en: "Real" },
+      sim: { es: "Simulado", gn: "Simulado", en: "Simulated" },
+      goal: { es: "Meta", gn: "Aipota", en: "Goal" },
+      kpiSource: { es: "KPIs sobre", gn: "KPI rehe", en: "KPIs source" },
+      byod: { es: "BYOD", gn: "BYOD", en: "BYOD" },
+      kit: { es: "Kit", gn: "Kit", en: "Kit" },
+      from: { es: "Desde", gn: "Guive", en: "From" },
+      to: { es: "Hasta", gn: "Peve", en: "To" },
+    } as const;
+
+    function t<K extends keyof typeof base>(k: K): any {
+      const v = base[k] as any;
+      return typeof v === "object" && ("es" in v || "gn" in v || "en" in v) ? v[lang] : v;
+    }
+    return { t };
+  }, [lang]);
+
+  const cfg = COMPANIES[empresa];
+
+  // ajustes por modo
+  const baselineLocal = useMemo(
+    () => cfg.baseline + (mode === "conservador" ? 0.2 : mode === "acelerado" ? -0.2 : 0),
+    [cfg.baseline, mode]
+  );
+  const byodLocal = useMemo(
+    () => clamp(cfg.byod + (mode === "conservador" ? -8 : mode === "acelerado" ? +6 : 0), 30, 95),
+    [cfg.byod, mode]
+  );
+  const npsLocal = useMemo(
+    () => clamp(cfg.nps + (mode === "conservador" ? -6 : mode === "acelerado" ? +6 : 0), -100, 100),
+    [cfg.nps, mode]
+  );
+  const alertsLocal = useMemo(
+    () => clamp(cfg.alerts + (mode === "conservador" ? -5 : mode === "acelerado" ? +4 : 0), 0, 100),
+    [cfg.alerts, mode]
+  );
+
+  // rango meses
+  const windowData = MONTHS24.slice(startIdx, endIdx + 1);
+  const len = windowData.length;
+
+  // series real/sim/meta/baseline
+  const series = useMemo(() => {
+    // Real: leve deriva + ruido
+    const real = Array.from({ length: len }, (_, i) =>
+      clamp(Number((baselineLocal + i * 0.02 + rand(-0.1, 0.1)).toFixed(2)), 2.4, 12)
+    );
+    // Simulado: tendencia de mejora con ruido
+    const sim = Array.from({ length: len }, (_, i) =>
+      clamp(Number((baselineLocal + 0.1 - i * 0.05 + rand(-0.12, 0.12)).toFixed(2)), 2.4, 12)
+    );
+    const baseline = Array.from({ length: len }, () => baselineLocal);
+    const goal = baseline.map((v) => Number((v * (1 + metaDelta / 100)).toFixed(2)));
+
+    // diferencia (positiva = sim < real)
+    const diffPos = sim.map((v, i) => Math.max(0, real[i] - v));
+    const diffNeg = sim.map((v, i) => Math.max(0, v - real[i]));
+
+    return windowData.map((m, i) => ({
+      name: m.short,
+      real: real[i],
+      sim: sim[i],
+      baseline: baseline[i],
+      goal: goal[i],
+      diffPos: diffPos[i],
+      diffNeg: diffNeg[i],
+    }));
+  }, [baselineLocal, metaDelta, windowData, refreshKey]);
+
+  // fuente de KPIs
+  const current = series[series.length - 1] || { real: 0, sim: 0 };
+  const ausValue = kpiSource === "sim" ? current.sim : current.real;
+  const deltaVsBase = ((ausValue - baselineLocal) / baselineLocal) * 100;
+  const diasEvitados = Math.max(0, (cfg.piloto * 22 * (baselineLocal - ausValue)) / 100 * (len / 12));
+  const ahorroMes = diasEvitados * cfg.costoDia;
+  const tarifaMes = cfg.piloto * 5;
+  const roiMes = tarifaMes > 0 ? ((ahorroMes - tarifaMes) / tarifaMes) * 100 : 0;
+
+  // otros datasets
+  const adopcion = useMemo(() => Math.round(rand(38, 72)), [refreshKey, empresa]);
+  const donutData = [
+    { name: "BYOD", value: byodLocal, fill: "#42d392" },
+    { name: "Kit", value: 100 - byodLocal, fill: "#7aa2ff" },
+  ];
+  const habitsData = useMemo(() =>
+    windowData.map((m) => ({
+      name: m.short,
+      actividad: Math.round(rand(46, 72)),
+      sueno: Math.round(rand(55, 80)),
+      nutricion: Math.round(rand(50, 77)),
+    })), [windowData, refreshKey, empresa]
+  );
+  const sleepData = useMemo(() =>
+    windowData.map((m) => ({ name: m.short, horas: Number(rand(6, 7.6).toFixed(1)) })),
+    [windowData, refreshKey, empresa]
+  );
+  const gaugeHRV = Math.round(rand(42, 68));
+  const gaugeFCR = Math.round(rand(58, 75));
+  const gaugeData = [
+    { name: "HRV", value: gaugeHRV, fill: "#42d392" },
+    { name: "FC reposo", value: gaugeFCR, fill: "#ff5d5d" },
+  ];
+
+  const rowsAreas = useMemo(() => {
+    const areas = [
+      "Operaciones",
+      "Atención al Cliente",
+      "Tecnología",
+      "Finanzas",
+      "Riesgos",
+      "Canales Digitales",
+      "Back Office",
+      "Marketing",
+    ];
+    return areas.map((a, i) => ({
+      area: a,
+      ausentismo: Number(rand(3.1, 4.8).toFixed(2)),
+      delta: Number(rand(-0.8, -0.1).toFixed(2)),
+      actividad: Math.round(rand(120, 230)),
+      sueno: Number(rand(6.0, 7.6).toFixed(1)),
+      alertas: Math.round(rand(65, 92)),
+      idx: i,
+    }));
+  }, [refreshKey, empresa, area]);
+
+  // spark series para KPIs
+  const sparkAus = series.map((d) => ({ name: d.name, value: kpiSource === "sim" ? d.sim : d.real }));
+  const sparkDias = series.map((d) => ({ name: d.name, value: Math.max(0, (cfg.piloto * 22 * (baselineLocal - (kpiSource === "sim" ? d.sim : d.real))) / 100) }));
+  const sparkROI = series.map((d) => {
+    const dias = Math.max(0, (cfg.piloto * 22 * (baselineLocal - (kpiSource === "sim" ? d.sim : d.real))) / 100);
+    return { name: d.name, value: ((dias * cfg.costoDia - tarifaMes) / tarifaMes) * 100 };
+  });
+  const sparkAdop = series.map((d, i) => ({ name: d.name, value: i < series.length - 1 ? rand(22, adopcion) : adopcion }));
+  const sparkNPS = series.map((d, i) => ({ name: d.name, value: i < series.length - 1 ? rand(35, 60) : npsLocal }));
+  const sparkAlert = series.map((d, i) => ({ name: d.name, value: i < series.length - 1 ? rand(60, 85) : alertsLocal }));
+
+  // ---------- CSV helper (reusable y testeable) ----------
+  function _csvFromRows(rows: (string | number)[][]): string {
+    return rows
+      .map((r) => r.map((v) => `"${String(v).replaceAll('"', '""')}"`).join(","))
+      .join("\n");
+  }
+
+  function exportCSV() {
+    const rows: (string | number)[][] = [
+      ["Métrica", "Valor"],
+      ["Empresa", empresa],
+      ["Fuente KPI", kpiSource.toUpperCase()],
+      ["Ausentismo actual", `${ausValue.toFixed(2)}%`],
+      ["Δ vs. baseline", `${deltaVsBase >= 0 ? "+" : ""}${deltaVsBase.toFixed(1)}%`],
+      ["Días evitados", Math.round(diasEvitados).toString()],
+      ["ROI mensual", `${roiMes >= 0 ? "+" : ""}${roiMes.toFixed(0)}%`],
+      ["Adopción", `${adopcion}%`],
+      ["NPS", `${npsLocal}`],
+      ["Alertas resueltas", `${alertsLocal}%`],
+    ];
+    const csv = _csvFromRows(rows);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "itti-care-pulse-resumen.csv";
+    a.click();
+  }
+
+  // ---------- Self-tests (dev) ----------
+  function runSelfTests() {
+    try {
+      console.assert(series.length === len, "[TEST] series length coincide con ventana seleccionada");
+      console.assert(sparkAus.length === series.length, "[TEST] sparkAus length ok");
+      const csvSample = _csvFromRows([["A", "B"], [1, 2]]);
+      console.assert(csvSample.includes("\n"), "[TEST] CSV usa salto de línea correcto");
+      console.assert(typeof T.t("title") === "string", "[TEST] i18n retorno string");
+      console.assert(len >= 6 && len <= 24, "[TEST] rango de meses dentro de 6–24");
+    } catch (e) {
+      console.warn("Self-tests error:", e);
+    }
+  }
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && (process.env.NODE_ENV || "development") !== "production") {
+      runSelfTests();
+    }
+  }, [empresa, metaDelta, mode, startIdx, endIdx, kpiSource, lang]);
+
+  const KPI = (
+    title: string,
+    value: React.ReactNode,
+    subtitle?: React.ReactNode,
+    series?: { name: string; value: number }[]
+  ) => (
+    <Card className="bg-[#111827]/70 border-white/10 shadow-xl backdrop-blur">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm text-slate-200/90">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="pt-0">
+        <div className="flex items-center justify-between">
+          <div className="text-3xl font-extrabold tracking-tight">{value}</div>
+          {subtitle ? (
+            <div
+              className={`text-xs px-2 py-1 rounded-full border ${
+                typeof subtitle === "string" && subtitle.includes("-")
+                  ? "text-emerald-300/90 border-emerald-400/30 bg-emerald-400/10"
+                  : "text-sky-300/90 border-sky-400/30 bg-sky-400/10"
+              }`}
+            >
+              {subtitle}
+            </div>
+          ) : null}
+        </div>
+        {series ? (
+          <div className="h-16 mt-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={series}>
+                <defs>
+                  <linearGradient id="spark" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#42d392" stopOpacity={0.9} />
+                    <stop offset="100%" stopColor="#42d392" stopOpacity={0.05} />
+                  </linearGradient>
+                </defs>
+                <Area type="monotone" dataKey="value" stroke="#42d392" fill="url(#spark)" strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+
+  return (
+    <div className="min-h-screen bg-[radial-gradient(1200px_800px_at_10%_-10%,#1f2a44_0%,#0b1220_45%,#0b1220_100%)] text-slate-100">
+      {/* Header */}
+      <header className="sticky top-0 z-40 backdrop-blur bg-[#0b1220]/80 border-b border-white/10">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3">
+          <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full bg-emerald-400 shadow-[0_0_0_6px_rgba(66,211,146,.2)]" />
+            <span className="font-bold tracking-wide">{T.t("title")} <span className="opacity-80">Pulse</span></span>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-slate-300">
+              {T.t("subtitle")}
+            </span>
+          </motion.div>
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              variant="secondary"
+              className="bg-white/5 border border-white/10 hover:bg-white/10"
+              onClick={() => setLang(lang === "es" ? "gn" : lang === "gn" ? "en" : "es")}
+            >
+              <Languages className="w-4 h-4 mr-2" /> ES / GN / EN
+            </Button>
+            <Button
+              variant="secondary"
+              className={`bg-white/5 border border-white/10 hover:bg-white/10 ${playing ? "ring-1 ring-emerald-400/40" : ""}`}
+              onClick={() => setPlaying((p) => !p)}
+              title={playing ? T.t("pause") : T.t("play")}
+            >
+              {playing ? <Pause className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />} {playing ? T.t("pause") : T.t("play")}
+            </Button>
+            <Button variant="secondary" className="bg-white/5 border border-white/10 hover:bg-white/10" onClick={() => setRefreshKey((k) => k + 1)}>
+              <RefreshCw className="w-4 h-4 mr-2" /> {T.t("refresh")}
+            </Button>
+            <Button className="bg-blue-500 hover:bg-blue-600" onClick={exportCSV}>
+              <Download className="w-4 h-4 mr-2" /> {T.t("export")}
+            </Button>
+          </div>
+        </div>
+
+        {/* Filtros */}
+        <div className="max-w-7xl mx-auto px-4 pb-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3">
+          <div>
+            <label className="text-xs text-slate-300/80">{T.t("filter_empresa")}</label>
+            <select value={empresa} onChange={(e) => setEmpresa(e.target.value)} className="w-full mt-1 px-3 py-2 bg-[#0f172a] border border-white/10 rounded-lg">
+              {Object.keys(COMPANIES).map((k) => (
+                <option key={k}>{k}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-slate-300/80">{T.t("filter_area")}</label>
+            <select value={area} onChange={(e) => setArea(e.target.value)} className="w-full mt-1 px-3 py-2 bg-[#0f172a] border border-white/10 rounded-lg">
+              {[
+                "General",
+                "Operaciones",
+                "Atención al Cliente",
+                "Tecnología",
+                "Finanzas",
+              ].map((a) => (
+                <option key={a}>{a}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-slate-300/80">{T.t("filter_goal")}</label>
+            <select value={metaDelta} onChange={(e) => setMetaDelta(Number(e.target.value))} className="w-full mt-1 px-3 py-2 bg-[#0f172a] border border-white/10 rounded-lg">
+              <option value={-10}>-10%</option>
+              <option value={-15}>-15%</option>
+              <option value={-20}>-20%</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-slate-300/80">{T.t("filter_mode")}</label>
+            <select value={mode} onChange={(e) => setMode(e.target.value as SimMode)} className="w-full mt-1 px-3 py-2 bg-[#0f172a] border border-white/10 rounded-lg">
+              <option value="base">Base</option>
+              <option value="conservador">Conservador</option>
+              <option value="acelerado">Acelerado</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-slate-300/80">{T.t("from")}</label>
+            <select value={startIdx} onChange={(e) => setStartIdx(Math.min(Number(e.target.value), endIdx - 5))} className="w-full mt-1 px-3 py-2 bg-[#0f172a] border border-white/10 rounded-lg">
+              {MONTHS24.map((m, i) => (
+                <option key={m.key} value={i}>
+                  {m.key}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-slate-300/80">{T.t("to")}</label>
+            <select value={endIdx} onChange={(e) => setEndIdx(Math.max(Number(e.target.value), startIdx + 5))} className="w-full mt-1 px-3 py-2 bg-[#0f172a] border border-white/10 rounded-lg">
+              {MONTHS24.map((m, i) => (
+                <option key={m.key} value={i}>
+                  {m.key}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </header>
+
+      {/* Main */}
+      <main className="max-w-7xl mx-auto px-4 py-6">
+        {/* KPIs */}
+        <div className="flex items-center gap-2 mb-2 text-xs">
+          <span className="opacity-80">{T.t("kpiSource")}:</span>
+          <div className="flex gap-1">
+            <button onClick={() => setKpiSource("real")} className={`px-2 py-1 rounded border ${kpiSource === "real" ? "bg-white/10 border-white/20" : "border-white/10"}`}>{T.t("real")}</button>
+            <button onClick={() => setKpiSource("sim")} className={`px-2 py-1 rounded border ${kpiSource === "sim" ? "bg-white/10 border-white/20" : "border-white/10"}`}>{T.t("sim")}</button>
+          </div>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
+          {KPI(
+            T.t("kpi_aus"),
+            `${ausValue.toFixed(2)}%`,
+            `${deltaVsBase >= 0 ? "+" : ""}${deltaVsBase.toFixed(1)}% vs. baseline`,
+            sparkAus
+          )}
+          {KPI(T.t("kpi_days"), Math.round(diasEvitados).toString(), "Meta", sparkDias)}
+          {KPI(T.t("kpi_roi"), `${roiMes >= 0 ? "+" : ""}${roiMes.toFixed(0)}%`, "Proyección", sparkROI)}
+          {KPI(T.t("kpi_adop"), `${adopcion}%`, `BYOD ${byodLocal}% / Kit ${100 - byodLocal}%`, sparkAdop as any)}
+          {KPI(T.t("kpi_nps"), npsLocal, "Encuesta", sparkNPS as any)}
+          {KPI(T.t("kpi_alerts"), `${alertsLocal}%`, "Resolución", sparkAlert as any)}
+        </div>
+
+        {/* Row: Tendencia & Donut */}
+        <div className="grid gap-4 mt-4 lg:grid-cols-3">
+          <Card className="lg:col-span-2 bg-[#111827]/70 border-white/10 shadow-xl">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm text-slate-200/90">{T.t("trend_aus")}</CardTitle>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="opacity-80">{T.t("series")}</span>
+                  <label className="flex items-center gap-1"><input type="checkbox" checked={showReal} onChange={(e) => setShowReal(e.target.checked)} />{T.t("real")}</label>
+                  <label className="flex items-center gap-1"><input type="checkbox" checked={showSim} onChange={(e) => setShowSim(e.target.checked)} />{T.t("sim")}</label>
+                  <label className="flex items-center gap-1"><input type="checkbox" checked={showMeta} onChange={(e) => setShowMeta(e.target.checked)} />{T.t("goal")}</label>
+                  <label className="flex items-center gap-1"><input type="checkbox" checked={showBaseline} onChange={(e) => setShowBaseline(e.target.checked)} />{T.t("baseline")}</label>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={series} syncId="aus">
+                    <CartesianGrid stroke="rgba(255,255,255,.08)" vertical={false} />
+                    <XAxis dataKey="name" stroke="#9fb7ff" tickLine={false} axisLine={false} />
+                    <YAxis stroke="#9fb7ff" tickLine={false} axisLine={false} domain={[2.4, 6.2]} unit="%" />
+                    <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid rgba(255,255,255,.1)", borderRadius: 10 }} />
+                    {/* Banda de diferencia Real-Sim (verde si sim < real, rojo si sim > real) */}
+                    {showReal && showSim && (
+                      <>
+                        <Area type="monotone" dataKey="diffPos" stackId="gap" stroke="none" fill="#42d39222" />
+                        <Area type="monotone" dataKey="diffNeg" stackId="gap" stroke="none" fill="#ff5d5d22" />
+                      </>
+                    )}
+                    {showBaseline && <Line type="monotone" dataKey="baseline" stroke="#9fb7ff" strokeWidth={2} dot={false} />}
+                    {showReal && <Line type="monotone" dataKey="real" stroke="#7aa2ff" strokeWidth={3} dot={false} />}
+                    {showSim && <Line type="monotone" dataKey="sim" stroke="#42d392" strokeWidth={3} dot={false} />}
+                    {showMeta && <Line type="monotone" dataKey="goal" stroke="#ffb020" strokeWidth={2} strokeDasharray="6 6" dot={false} />}
+                    <Brush height={22} travellerWidth={10} onChange={(e: any) => {
+                      if (!e) return;
+                      setStartIdx(startIdx + (e.startIndex || 0));
+                      setEndIdx(startIdx + (e.endIndex || series.length - 1));
+                    }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="relative bg-[#111827]/70 border-white/10 shadow-xl">
+            <CardHeader>
+              <CardTitle className="text-sm text-slate-200/90">{T.t("adoption")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-64 relative">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={donutData} innerRadius={60} outerRadius={90} paddingAngle={2} dataKey="value">
+                      {donutData.map((d, i) => (
+                        <Cell key={i} fill={d.fill} />
+                      ))}
+                    </Pie>
+                    <Legend />
+                    <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid rgba(255,255,255,.1)", borderRadius: 10 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+                {/* Etiqueta central */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <div className="text-2xl font-extrabold">{Math.round(donutData[0].value)}%</div>
+                  <div className="text-xs text-sky-200">{T.t("byod")}</div>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 mt-2 text-xs text-slate-300">
+                <span className="px-2 py-1 bg-white/5 border border-white/10 rounded-full">WhatsApp: Pausa Activa 10:30</span>
+                <span className="px-2 py-1 bg-white/5 border border-white/10 rounded-full">WhatsApp: Check de Sueño</span>
+                <span className="px-2 py-1 bg-white/5 border border-white/10 rounded-full">WhatsApp: Hidratación</span>
+                <span className="ml-auto px-2 py-1 bg-white/5 border border-white/10 rounded-full">{T.t("consent")}</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Row: Hábitos, Biométricos, Sueño */}
+        <div className="grid gap-4 mt-4 lg:grid-cols-3">
+          <Card className="bg-[#111827]/70 border-white/10 shadow-xl">
+            <CardHeader>
+              <CardTitle className="text-sm text-slate-200/90">{T.t("habits")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={habitsData} syncId="aus">
+                    <CartesianGrid stroke="rgba(255,255,255,.08)" vertical={false} />
+                    <XAxis dataKey="name" stroke="#9fb7ff" tickLine={false} axisLine={false} />
+                    <YAxis stroke="#9fb7ff" tickLine={false} axisLine={false} domain={[0, 100]} />
+                    <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid rgba(255,255,255,.1)", borderRadius: 10 }} />
+                    <Bar dataKey="actividad" stackId="a" fill="#7aa2ff" />
+                    <Bar dataKey="sueno" stackId="a" fill="#42d392" />
+                    <Bar dataKey="nutricion" stackId="a" fill="#ffb020" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-[#111827]/70 border-white/10 shadow-xl">
+            <CardHeader>
+              <CardTitle className="text-sm text-slate-200/90">{T.t("biometrics")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadialBarChart data={gaugeData} innerRadius={20} outerRadius={110} startAngle={180} endAngle={0}>
+                    <RadialBar background dataKey="value" cornerRadius={8} />
+                    <Legend />
+                    <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid rgba(255,255,255,.1)", borderRadius: 10 }} />
+                  </RadialBarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-[#111827]/70 border-white/10 shadow-xl">
+            <CardHeader>
+              <CardTitle className="text-sm text-slate-200/90">{T.t("sleep")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={sleepData}>
+                    <defs>
+                      <linearGradient id="sleep" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#ffb020" stopOpacity={0.9} />
+                        <stop offset="100%" stopColor="#ffb020" stopOpacity={0.05} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid stroke="rgba(255,255,255,.08)" vertical={false} />
+                    <XAxis dataKey="name" stroke="#9fb7ff" tickLine={false} axisLine={false} />
+                    <YAxis stroke="#9fb7ff" tickLine={false} axisLine={false} domain={[5, 8]} />
+                    <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid rgba(255,255,255,.1)", borderRadius: 10 }} />
+                    <Area type="monotone" dataKey="horas" stroke="#ffb020" fill="url(#sleep)" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Tabla por áreas */}
+        <Card className="mt-4 bg-[#111827]/70 border-white/10 shadow-xl">
+          <CardHeader>
+            <CardTitle className="text-sm text-slate-200/90">{T.t("table_title")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between text-xs text-slate-300 mb-2">
+              <div className="flex gap-3 flex-wrap">
+                <span className="px-2 py-1 rounded-full bg-emerald-400/10 border border-emerald-300/30 text-emerald-200">↓ Ausentismo</span>
+                <span className="px-2 py-1 rounded-full bg-blue-400/10 border border-blue-300/30 text-blue-200">Actividad</span>
+                <span className="px-2 py-1 rounded-full bg-amber-400/10 border border-amber-300/30 text-amber-200">Sueño</span>
+                <span className="px-2 py-1 rounded-full bg-red-400/10 border border-red-300/30 text-red-200">Alertas</span>
+              </div>
+              <div className="flex gap-2">
+                <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Vista: {len} meses</span>
+                <span className="px-2 py-1 rounded-full bg-white/5 border border-white/10">Anonimizado</span>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-slate-300">
+                  <tr className="border-b border-white/10">
+                    <th className="text-left py-2 pr-3">Área</th>
+                    <th className="text-left py-2 pr-3">Ausentismo</th>
+                    <th className="text-left py-2 pr-3">Δ vs. baseline</th>
+                    <th className="text-left py-2 pr-3">Actividad (min/sem)</th>
+                    <th className="text-left py-2 pr-3">Sueño útil (h)</th>
+                    <th className="text-left py-2 pr-3">Alertas resueltas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rowsAreas.map((r) => (
+                    <tr
+                      key={r.idx}
+                      onClick={() => setSelectedRow(r.idx)}
+                      className={`border-b border-white/5 hover:bg-white/5 cursor-pointer ${selectedRow === r.idx ? "bg-white/10" : ""}`}
+                    >
+                      <td className="py-2 pr-3">{r.area}</td>
+                      <td className="py-2 pr-3">{r.ausentismo.toFixed(2)}%</td>
+                      <td className="py-2 pr-3 text-emerald-300">{r.delta.toFixed(2)}%</td>
+                      <td className="py-2 pr-3">{r.actividad}</td>
+                      <td className="py-2 pr-3">{r.sueno.toFixed(1)}</td>
+                      <td className="py-2 pr-3">{r.alertas}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {selectedRow !== null && (
+              <div className="mt-3 text-xs text-slate-300">
+                <span className="opacity-80">Área seleccionada:</span> {rowsAreas[selectedRow].area} — {rowsAreas[selectedRow].ausentismo.toFixed(2)}% ausentismo, Δ {rowsAreas[selectedRow].delta.toFixed(2)}%
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <p className="text-xs text-slate-400 mt-6 text-center">
+          Demo sin datos personales. Métricas simuladas con fines de prototipo. © Itti Care Pulse — React Mockup.
+        </p>
+      </main>
+    </div>
+  );
+}
