@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Mapa Deserción y Conflicto</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { margin: 0; font-family: 'Poppins', sans-serif; background: linear-gradient(135deg,#eef2f3,#8e9eab); }
+    #map { height: 100vh; width: 100vw; }
+    .popup-chart { width: 220px; height: 140px; }
+    #sliderContainer {
+      position: absolute;
+      left: 50%;
+      bottom: 20px;
+      transform: translateX(-50%);
+      background: rgba(255,255,255,0.9);
+      border-radius: 12px;
+      padding: 10px 15px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    #yearRange { width: 160px; }
+    .legend {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: rgba(255,255,255,0.9);
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 14px;
+      line-height: 1.4;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+    }
+    .legend div { margin-bottom: 4px; display: flex; align-items: center; }
+    .legend span { margin-left: 6px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="sliderContainer">
+    <label for="yearRange">Año: <span id="yearLabel">2021</span></label>
+    <input type="range" id="yearRange" min="2021" max="2025" value="2021" step="1" />
+  </div>
+  <div class="legend" id="legend"></div>
+  <script>
+    const map = L.map('map').setView([4.5, -74], 6);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; OpenStreetMap, &copy; CartoDB'
+    }).addTo(map);
+
+    const iconos = {
+      reclutamiento: L.divIcon({className: '', html: '👤', iconSize: [24,24]}),
+      ataque: L.divIcon({className: '', html: '🧨', iconSize: [24,24]}),
+      desplazamiento: L.divIcon({className: '', html: '🧭', iconSize: [24,24]}),
+      confinamiento: L.divIcon({className: '', html: '🚫', iconSize: [24,24]})
+    };
+
+    const municipiosHistorico = {
+      "Tumaco": {
+        coords: [1.8, -78.8], riesgo: 'reclutamiento',
+        data: {2021:[6.2,9.4],2022:[6.8,10],2023:[7,10.3],2024:[7.2,10.5],2025:[7.4,11]}
+      },
+      "Quibdó": {
+        coords: [5.7, -76.6], riesgo: 'desplazamiento',
+        data: {2021:[5.2,7.5],2022:[5.6,8.0],2023:[5.8,8.2],2024:[6.0,8.1],2025:[6.1,8.4]}
+      },
+      "Tibú": {
+        coords: [8.6, -72.7], riesgo: 'ataque',
+        data: {2021:[5.0,6.9],2022:[5.3,7.2],2023:[5.4,7.5],2024:[5.5,7.9],2025:[5.7,8.2]}
+      }
+    };
+
+    const markers = {};
+
+    function actualizarMarcadores(ano) {
+      Object.keys(municipiosHistorico).forEach(nombre => {
+        const mun = municipiosHistorico[nombre];
+        const datos = mun.data[ano];
+
+        if (markers[nombre]) map.removeLayer(markers[nombre]);
+
+        const marker = L.marker(mun.coords, {icon: iconos[mun.riesgo]});
+        marker.addTo(map);
+        marker.bindPopup(`
+          <b>${nombre}</b><br>Año: ${ano}<br>Riesgo: ${mun.riesgo}<br>
+          <canvas id="chart-${nombre.replace(/\s/g,'')}" class="popup-chart"></canvas>
+        `);
+
+        marker.on('popupopen', () => {
+          new Chart(document.getElementById(`chart-${nombre.replace(/\s/g,'')}`), {
+            type: 'bar',
+            data: {
+              labels: ['Primaria','Secundaria'],
+              datasets:[{label:'Deserción %',data:datos,backgroundColor:['#36A2EB','#FF6384']}]
+            },
+            options: {
+              responsive:false,
+              plugins:{legend:{display:false}},
+              scales:{y:{beginAtZero:true,max:15}}
+            }
+          });
+        });
+        markers[nombre] = marker;
+      });
+    }
+
+    document.getElementById('yearRange').addEventListener('input', e => {
+      const year = e.target.value;
+      document.getElementById('yearLabel').textContent = year;
+      actualizarMarcadores(year);
+    });
+
+    function construirLeyenda() {
+      const div = document.getElementById('legend');
+      div.innerHTML = '';
+      const tipos = {reclutamiento:'👤', ataque:'🧨', desplazamiento:'🧭', confinamiento:'🚫'};
+      for (const [k,v] of Object.entries(tipos)) {
+        const item = document.createElement('div');
+        item.innerHTML = `<span>${v}</span><span>${k}</span>`;
+        div.appendChild(item);
+      }
+    }
+
+    construirLeyenda();
+    actualizarMarcadores(2021);
+  </script>
+</body>
+</html>
