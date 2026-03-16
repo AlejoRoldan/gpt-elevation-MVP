@@ -1,131 +1,22 @@
-# GPT Elevation — Plataforma de Bienestar Emocional con IA Ética
+# Elevation - Plataforma de Acompañamiento Emocional con IA
 
-> *Un espacio para encontrarte contigo mismo.*
+## Visión del Producto
+Elevation es un espacio seguro de apoyo en salud mental que combina frameworks psicológicos (como la Terapia de Aceptación y Compromiso) con inteligencia artificial ética. Su objetivo es brindar un acompañamiento empático y confidencial para la introspección.
 
-Elevation es una plataforma de acompañamiento emocional que combina la profundidad de la psicología humanista con la disponibilidad de la inteligencia artificial, siempre desde la ética y el respeto a la privacidad.
+## Arquitectura del Sistema Implementada (Fase 1: Conexión Base)
+Hemos evolucionado del MVP estático a una arquitectura moderna de microservicios, priorizando la privacidad del usuario desde el día uno.
 
----
+### 1. Frontend (La Interfaz de Usuario)
+* **Tecnología:** React + Vite + Tailwind CSS v4.
+* **Diseño Trauma-Informed:** Implementamos un diseño basado en el minimalismo japonés. Se eliminaron distracciones y bordes agresivos, utilizando una paleta de colores cálida (fondo `FAFAF9`) para reducir la carga cognitiva y generar calma.
+* **Logros Técnicos:** Configuración de túneles de red (Network Bypass) para aislar la aplicación de bloqueos de firewalls o VPNs estrictas, garantizando una conexión ininterrumpida.
 
-## Estructura del Repositorio
+### 2. Backend (La Bóveda Segura)
+* **Tecnología:** Node.js + Express.
+* **Seguridad (Proxy Inverso):** El frontend nunca se conecta directamente a la IA. Todos los mensajes viajan primero a nuestra Bóveda Segura (Backend). Esto evita la exposición de credenciales y permite interceptar los datos.
+* **Logros Técnicos:** API REST inicializada con políticas CORS configuradas. Comunicación bidireccional asíncrona establecida exitosamente entre el cliente (React) y el servidor (Node.js).
 
-```
-/
-├── platform/              ← Código fuente de la plataforma web (v2)
-│   ├── client/            ← Frontend React 19 + Tailwind 4 + Framer Motion
-│   ├── server/            ← Backend Express + tRPC + LLM proxy seguro
-│   ├── drizzle/           ← Esquema de base de datos (MySQL/TiDB)
-│   └── shared/            ← Tipos y constantes compartidas
-├── MVP_original.html      ← MVP inicial HTML/JS (referencia histórica)
-├── Elevation2             ← Prototipo contemplativo en React (referencia de diseño)
-├── Flujo2                 ← Diagrama de flujo del acompañante
-├── TelegramBot            ← Bot de Telegram n8n (MVP anterior)
-├── healtech               ← Dashboard de bienestar organizacional
-├── Initial MVP deployment ← Documentación del despliegue inicial
-└── private policy         ← Política de privacidad
-```
-
----
-
-## Stack Técnico (Plataforma v2)
-
-| Capa | Tecnología |
-|------|-----------|
-| Frontend | React 19, Tailwind CSS 4, Framer Motion, Recharts |
-| Backend | Express 4, tRPC 11, TypeScript |
-| Base de datos | MySQL/TiDB con Drizzle ORM |
-| IA | LLM via proxy seguro (API key solo en servidor) |
-| Autenticación | Manus OAuth |
-| Testing | Vitest (56 tests, 0 errores TypeScript) |
-
----
-
-## Funcionalidades Implementadas
-
-### Núcleo
-- **Autenticación segura** con OAuth y gestión de sesiones
-- **Onboarding con consentimiento granular** en lenguaje claro (5 tipos de consentimiento)
-- **Chat con acompañante de IA** basado en Terapia de Aceptación y Compromiso (ACT)
-- **Proxy seguro hacia LLM** — la API key nunca llega al cliente
-- **Anonimización de datos sensibles** antes de enviar al modelo
-
-### Bienestar y Reflexión
-- **Sistema de sesiones** con mood pre/post y metadatos
-- **Pantalla de cierre ritual** con frase ACT generada por IA y visualización del cambio de mood
-- **Reflexiones guardadas** con etiquetas temáticas
-- **Insights personales** con gráficos de evolución emocional (Recharts)
-- **Recordatorios de práctica** con horarios y mensajes personalizados
-
-### Privacidad y Ética
-- **Gestión granular de consentimientos** (otorgar/revocar en cualquier momento)
-- **Exportación de datos** en JSON (derecho de acceso)
-- **Exportación de reflexiones** en CSV y PDF con diseño contemplativo
-- **Derecho al olvido** — borrado permanente de cuenta y todos los datos
-- **Protocolo de detección de crisis** con recursos de ayuda por región
-- **Log de consentimientos** auditable
-
-### Administración
-- **Panel de configuración del acompañante** (admin) con documentación del Hexaflex ACT
-
----
-
-## Marco Psicológico — Hexaflex ACT
-
-El acompañante opera sobre los **6 procesos del Hexaflex ACT**:
-
-| Proceso | Descripción |
-|---------|-------------|
-| **Aceptación** | Hacer espacio para emociones difíciles sin luchar contra ellas |
-| **Defusión cognitiva** | Observar pensamientos sin fusionarse con ellos |
-| **Momento presente** | Atención plena al aquí y ahora |
-| **Yo como contexto** | El observador que no es sus pensamientos |
-| **Clarificación de valores** | Lo que realmente importa |
-| **Acción comprometida** | Pasos concretos hacia una vida con sentido |
-
----
-
-## Esquema de Base de Datos (Ético)
-
-```
-users              ← Datos de autenticación (PII mínima)
-user_profiles      ← Preferencias y configuración
-sessions           ← Metadatos de sesiones (mood pre/post, duración)
-chat_messages      ← Mensajes de conversación
-reflections        ← Reflexiones guardadas con etiquetas
-consent_log        ← Historial auditable de consentimientos
-crisis_flags       ← Detecciones de crisis (anonimizadas)
-reminders          ← Recordatorios de práctica
-```
-
----
-
-## Principios de Diseño
-
-- **Trauma-Informed Design**: sin urgencia, sin juicio, sin notificaciones intrusivas
-- **Paleta contemplativa**: azul profundo (`#0a0f1e`) + dorado (`#f5c842`)
-- **Tipografía**: Cormorant Garamond (display) + Inter (cuerpo)
-- **Microinteracciones empáticas** con Framer Motion
-- **Mobile-first** y accesibilidad WCAG AA
-
----
-
-## Instalación Local
-
-```bash
-cd platform
-pnpm install
-cp .env.example .env   # Configurar variables de entorno
-pnpm dev               # Servidor en http://localhost:3000
-```
-
-## Tests
-
-```bash
-cd platform
-pnpm test              # 56 tests, 0 errores TypeScript
-```
-
----
-
-## Licencia
-
-Proyecto privado — Alejandro Roldán © 2025
+## Siguientes Fases (En Desarrollo)
+- [ ] Construir el **Anonimizador PII** en Node.js para enmascarar nombres y datos sensibles antes de tocar la IA.
+- [ ] Conectar la Bóveda Segura con el motor de IA.
+- [ ] Implementar la Base de Datos y el esquema de "Autenticación de Cero-Conocimiento" (Bcrypt/AES-256).
