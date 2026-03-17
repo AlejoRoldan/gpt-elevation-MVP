@@ -141,3 +141,5 @@ const PORT = 3000;
 app.listen(PORT, () => {
     console.log(`🚀 Servidor de Elevation conectado al cerebro de IA en el puerto ${PORT}`);
 });
+
+module.exports = app;
