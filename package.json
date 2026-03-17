@@ -5,3 +5,10 @@
     "express": "^5.2.1"
   }
 }
+
+{
+  "scripts": {
+    "install": "npm install --legacy-peer-deps && cd frontend && npm install --legacy-peer-deps",
+    "build": "cd frontend && npm run build"
+  }
+}
