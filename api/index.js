@@ -1,2 +1,6 @@
-const app = require('../backend/server.js');
-module.exports = app;
+{
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index.js" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
