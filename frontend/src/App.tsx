@@ -17,6 +17,25 @@ function App() {
   const mensajeBienvenida = { role: 'bot', text: 'Hola. Soy Elevation. Gracias por acercarte. Este espacio es para explorar lo que sientes, lo que vives y lo que sueñas. ¿Desde dónde estás llegando hoy?' };
   const [messages, setMessages] = useState<any[]>([mensajeBienvenida]);
 
+const inicializarSesion = async () => {
+  const token = localStorage.getItem('elevation_token');
+  if (!token) return;
+  setIsLoggedIn(true);
+  try {
+    const response = await fetch(`${import.meta.env.VITE_BACKEND_URL || ''}/api/messages`, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (response.ok) {
+      const historialBD = await response.json();
+      if (historialBD.length > 0) {
+        setMessages([mensajeBienvenida, ...historialBD]);
+      }
+    }
+  } catch (error) {
+    console.error("❌ Error:", error);
+  }
+};
   // NUEVO: Función para ir al backend y traer la historia del chat
  // --- BLOQUE DE ARRANQUE UNIFICADO ---
  useEffect(() => {
@@ -71,7 +90,7 @@ function App() {
         } else {
           localStorage.setItem('elevation_token', data.token); // Guardamos la llave
           setIsLoggedIn(true);
-         
+         await inicializarSesion();
         }
       } else {
         setAuthMessage(`❌ ${data.error}`);
