@@ -27,10 +27,10 @@ function App() {
       setIsLoggedIn(true);
 
       try {
-        const response = await fetch('/api/messages', {
-          method: 'GET',
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL || ''}/api/messages`, {
+  method: 'GET',
+  headers: { 'Authorization': `Bearer ${token}` }
+});
 
         if (response.ok) {
           const historialBD = await response.json();
