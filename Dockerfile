@@ -8,7 +8,7 @@ WORKDIR /app
 COPY . .
 
 # 4. Magia del Frontend: Instalamos y "horneamos" React directo en la nube
-RUN cd frontend && npm install && npm run build
+RUN cd frontend && npm install --legacy-peer-deps && npm run build
 
 # 5. Magia del Backend: Instalamos sus herramientas
 RUN cd backend && npm install
