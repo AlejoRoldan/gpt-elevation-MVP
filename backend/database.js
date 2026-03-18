@@ -1,22 +1,29 @@
 const { Sequelize } = require('sequelize');
-const path = require('path');
+require('dotenv').config(); // Carga las variables de tu archivo .env
 
-// Inicializamos la conexión con SQLite
-// Esto creará automáticamente un archivo llamado "elevation_vault.sqlite" en tu backend
-const sequelize = new Sequelize({
-  dialect: 'sqlite',
-  storage: path.join(__dirname, 'elevation_vault.sqlite'),
-  logging: false // Apagamos los logs de la base de datos para mantener la consola limpia
+// Extraemos las credenciales de las variables de entorno
+const DB_USER = process.env.DB_USER;
+const DB_PASS = encodeURIComponent(process.env.DB_PASS);
+const DB_HOST = process.env.DB_HOST;
+const DB_NAME = process.env.DB_NAME;
+
+// Construimos la URL de conexión a PostgreSQL
+const databaseUrl = `postgres://${DB_USER}:${DB_PASS}@${DB_HOST}:5432/${DB_NAME}`;
+
+// Rayos X: Imprimimos la URL en consola (ocultando la contraseña por seguridad)
+console.log('🚨 URL DE CONEXIÓN ARMADA:', `postgres://${DB_USER}:***@${DB_HOST}:5432/${DB_NAME}`);
+
+// Inicializamos Sequelize con la configuración estricta para Google Cloud
+const sequelize = new Sequelize(databaseUrl, {
+  dialect: 'postgres',
+  dialectOptions: {
+    ssl: {
+      require: true,
+      rejectUnauthorized: false // Vital para conexiones en la nube como GCP
+    }
+  },
+  logging: false // Evita que la terminal se llene de ruido
 });
 
-// Verificamos la conexión
-const connectDB = async () => {
-  try {
-    await sequelize.authenticate();
-    console.log('🗄️ Bóveda de Datos (SQLite) conectada y encriptada con éxito.');
-  } catch (error) {
-    console.error('❌ Error al conectar con la base de datos:', error);
-  }
-};
-
-module.exports = { sequelize, connectDB };
+// Exportamos la conexión para que los modelos (User, Message) y server.js la puedan usar
+module.exports = sequelize;

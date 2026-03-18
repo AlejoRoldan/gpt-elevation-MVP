@@ -1,5 +1,7 @@
+ 
 import { useState, useEffect } from 'react';
 import { HiOutlineEye, HiOutlineEyeOff } from 'react-icons/hi';
+
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -13,39 +15,36 @@ function App() {
   
   // Mensaje por defecto si la base de datos está vacía
   const mensajeBienvenida = { role: 'bot', text: 'Hola. Soy Elevation. Gracias por acercarte. Este espacio es para explorar lo que sientes, lo que vives y lo que sueñas. ¿Desde dónde estás llegando hoy?' };
-  const [messages, setMessages] = useState([mensajeBienvenida]);
+  const [messages, setMessages] = useState<any[]>([mensajeBienvenida]);
 
   // NUEVO: Función para ir al backend y traer la historia del chat
-  const cargarHistorial = async (token: string) => {
-    try {
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/messages`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        // Si hay mensajes en la base de datos, los mostramos. Si no, dejamos el saludo.
-        if (data.length > 0) {
-          setMessages(data);
-        } else {
-          setMessages([mensajeBienvenida]);
-        }
-      } else {
-        // Si el token es inválido o caducó, forzamos cierre de sesión por seguridad
-        handleLogout(); 
-      }
-    } catch (error) {
-      console.error("Error al cargar el historial", error);
-    }
-  };
-
-  // NUEVO: Hook que se dispara solo al abrir o recargar la página
+ // --- BLOQUE DE ARRANQUE UNIFICADO ---
   useEffect(() => {
-    const token = localStorage.getItem('elevation_token');
-    if (token) {
-      setIsLoggedIn(true); // Evitamos que pida usuario/contraseña
-      cargarHistorial(token); // Traemos sus mensajes antiguos
-    }
-  }, []);
+    const inicializarSesion = async () => {
+      const token = localStorage.getItem('elevation_token');
+      if (!token) return;
+
+      setIsLoggedIn(true);
+
+      try {
+        const response = await fetch('/api/messages', {
+          method: 'GET',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const historialBD = await response.json();
+          if (historialBD.length > 0) {
+            setMessages([mensajeBienvenida, ...historialBD]);
+          }
+        }
+      } catch (error) {
+        console.error("❌ Error en la carga inicial:", error);
+      }
+    };
+
+    inicializarSesion();
+  }, []); // Sin dependencias para que solo corra al cargar
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,9 +68,9 @@ function App() {
           setPassword('');
           setName('');
         } else {
-          localStorage.setItem('elevation_token', data.token);
+          localStorage.setItem('elevation_token', data.token); // Guardamos la llave
           setIsLoggedIn(true);
-          cargarHistorial(data.token); // Al hacer login, cargamos sus datos
+         
         }
       } else {
         setAuthMessage(`❌ ${data.error}`);
@@ -105,13 +104,19 @@ function App() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('elevation_token');
-    setIsLoggedIn(false);
-    setEmail('');
-    setPassword('');
-    setMessages([mensajeBienvenida]); // Limpiamos el chat visualmente
-  };
+const handleLogout = () => {
+  // 1. Botamos la llave del bolsillo del navegador
+  localStorage.removeItem('token'); 
+
+  // 2. Cerramos la puerta visualmente
+  setIsLoggedIn(false);            
+
+  // 3. Reseteamos la memoria del chat al saludo inicial
+  setMessages([mensajeBienvenida]); 
+
+   setEmail('');
+   setPassword('');
+};
 
   if (!isLoggedIn) {
     return (

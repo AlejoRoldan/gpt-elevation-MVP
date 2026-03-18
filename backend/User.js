@@ -1,5 +1,5 @@
 const { DataTypes } = require('sequelize');
-const { sequelize } = require('./database');
+const sequelize = require('./database');
 
 // Definimos la estructura de la tabla 'User'
 const User = sequelize.define('User', {
