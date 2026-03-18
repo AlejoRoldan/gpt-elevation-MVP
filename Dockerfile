@@ -7,8 +7,8 @@ WORKDIR /app
 # 3. Copiamos TODOS los archivos de tu proyecto (backend y frontend)
 COPY . .
 
-# 4. Magia del Frontend: Instalamos y "horneamos" React directo en la nube
-RUN cd frontend && npm install --legacy-peer-deps && npm run build
+# 4. Magia del Frontend: Instalamos, inyectamos la URL y "horneamos" React directo en la nube
+RUN cd frontend && npm install --legacy-peer-deps && echo "VITE_API_URL=https://elevation-ia-747531656650.us-central1.run.app" > .env && npm run build
 
 # 5. Magia del Backend: Instalamos sus herramientas
 RUN cd backend && npm install
