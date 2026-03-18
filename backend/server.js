@@ -212,9 +212,12 @@ app.get('/api/messages', verificarToken, async (req, res) => {
 // si no, usamos el 8080 por defecto.
 const PORT = process.env.PORT || 8080;
 
-// Arrancamos el servidor
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Elevation está en el aire en el puerto ${PORT}`);
-    console.log(`🌍 Conectado al cerebro de IA y listo para el cliente.`);
 });
+
+// Configuraciones de estabilidad para Google Cloud
+server.keepAliveTimeout = 65000;
+server.headersTimeout = 66000;
+
 module.exports = app;
