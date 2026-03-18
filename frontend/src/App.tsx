@@ -53,7 +53,7 @@ function App() {
     const bodyData = isRegistering ? { name, email, password } : { email, password };
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/${endpoint}`, {
+    const response = await fetch(`${import.meta.env.VITE_BACKEND_URL || ''}/api/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bodyData),
@@ -88,7 +88,7 @@ function App() {
     setInput('');
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/chat`, {
+    const response = await fetch(`${import.meta.env.VITE_BACKEND_URL || ''}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
