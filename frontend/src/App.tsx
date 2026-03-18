@@ -19,18 +19,19 @@ function App() {
 
   // NUEVO: Función para ir al backend y traer la historia del chat
  // --- BLOQUE DE ARRANQUE UNIFICADO ---
-  useEffect(() => {
+ useEffect(() => {
     const inicializarSesion = async () => {
-      const token = localStorage.getItem('elevation_token');
+      const token = localStorage.getItem('elevation_token'); // <-- Asegúrate de que diga elevation_token
       if (!token) return;
 
       setIsLoggedIn(true);
 
       try {
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL || ''}/api/messages`, {
-  method: 'GET',
-  headers: { 'Authorization': `Bearer ${token}` }
-});
+        // LA LÍNEA DEL GOL: Agregamos el backend URL o vacío
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL || ''}/api/messages`, {
+          method: 'GET',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
 
         if (response.ok) {
           const historialBD = await response.json();
@@ -44,7 +45,7 @@ function App() {
     };
 
     inicializarSesion();
-  }, []); // Sin dependencias para que solo corra al cargar
+  }, []);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
