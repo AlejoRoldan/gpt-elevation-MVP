@@ -4,17 +4,17 @@ FROM node:20-slim
 # 2. Directorio de trabajo
 WORKDIR /app
 
-# 3. Copiar archivos de dependencias
-COPY backend/package*.json ./backend/
-
-# 4. Instalar librerías
-RUN cd backend && npm install
-
-# 5. Copiar TODO el código (Ojo aquí: un solo espacio entre los puntos)
+# 3. Copiamos TODOS los archivos de tu proyecto (backend y frontend)
 COPY . .
 
-# 6. Exponer puerto 8080
+# 4. Magia del Frontend: Instalamos y "horneamos" React directo en la nube
+RUN cd frontend && npm install && npm run build
+
+# 5. Magia del Backend: Instalamos sus herramientas
+RUN cd backend && npm install
+
+# 6. Exponemos el puerto
 EXPOSE 8080
 
-# 7. Comando de arranque
+# 7. Encendemos los motores
 CMD ["node", "backend/server.js"]
