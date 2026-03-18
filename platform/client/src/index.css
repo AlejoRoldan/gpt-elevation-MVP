@@ -1,6 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,700;1,400&family=Inter:wght@300;400;500;600&family=Dancing+Script:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;500&family=Noto+Sans+JP:wght@300;400;500&family=Shippori+Mincho:wght@400;500&display=swap');
 
 @custom-variant dark (&:is(.dark *));
 
@@ -44,58 +44,131 @@
 }
 
 :root {
-  /* Elevation: Dark contemplative theme (default) */
-  --radius: 0.75rem;
-  --background: oklch(0.10 0.025 265);
-  --foreground: oklch(0.93 0.01 265);
-  --card: oklch(0.13 0.025 265);
-  --card-foreground: oklch(0.93 0.01 265);
-  --popover: oklch(0.13 0.025 265);
-  --popover-foreground: oklch(0.93 0.01 265);
-  --primary: oklch(0.78 0.15 75);
-  --primary-foreground: oklch(0.10 0.025 265);
-  --secondary: oklch(0.20 0.035 265);
-  --secondary-foreground: oklch(0.88 0.01 265);
-  --muted: oklch(0.17 0.025 265);
-  --muted-foreground: oklch(0.58 0.02 265);
-  --accent: oklch(0.22 0.04 265);
-  --accent-foreground: oklch(0.88 0.01 265);
-  --destructive: oklch(0.55 0.22 25);
+  /* ─────────────────────────────────────────────────────────────────────────
+   * Elevation — Sistema de Diseño Japonés (Wabi-Sabi + Ma)
+   *
+   * Filosofía:
+   *   • Ma (間): espacio vacío como elemento de diseño, no como ausencia
+   *   • Wabi-sabi: belleza en la imperfección y la impermanencia
+   *   • Shibui: elegancia austera, sin ornamento innecesario
+   *
+   * Paleta: Papel de arroz (washi), tinta sumi, bambú, cielo de amanecer
+   * ───────────────────────────────────────────────────────────────────────── */
+  --radius: 0.25rem;
+
+  /* Washi paper base — fondo cálido de papel de arroz */
+  --background: oklch(0.975 0.008 85);
+  --foreground: oklch(0.18 0.015 60);
+
+  /* Card — superficie ligeramente más cálida */
+  --card: oklch(0.985 0.006 80);
+  --card-foreground: oklch(0.18 0.015 60);
+
+  /* Popover */
+  --popover: oklch(0.99 0.004 75);
+  --popover-foreground: oklch(0.18 0.015 60);
+
+  /* Primary — tinta sumi (negro japonés con matiz cálido) */
+  --primary: oklch(0.22 0.018 60);
+  --primary-foreground: oklch(0.975 0.008 85);
+
+  /* Secondary — bambú pálido */
+  --secondary: oklch(0.94 0.018 100);
+  --secondary-foreground: oklch(0.28 0.02 80);
+
+  /* Muted — niebla de montaña */
+  --muted: oklch(0.955 0.010 85);
+  --muted-foreground: oklch(0.50 0.018 70);
+
+  /* Accent — sakura (rosa pétalo muy suave) */
+  --accent: oklch(0.945 0.022 15);
+  --accent-foreground: oklch(0.28 0.02 20);
+
+  /* Destructive — rojo torii */
+  --destructive: oklch(0.52 0.18 25);
   --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.22 0.03 265);
-  --input: oklch(0.17 0.03 265);
-  --ring: oklch(0.78 0.15 75);
-  --chart-1: oklch(0.78 0.15 75);
-  --chart-2: oklch(0.55 0.14 165);
-  --chart-3: oklch(0.55 0.14 265);
-  --chart-4: oklch(0.65 0.14 295);
-  --chart-5: oklch(0.55 0.22 25);
-  --sidebar: oklch(0.12 0.025 265);
-  --sidebar-foreground: oklch(0.93 0.01 265);
-  --sidebar-primary: oklch(0.78 0.15 75);
-  --sidebar-primary-foreground: oklch(0.10 0.025 265);
-  --sidebar-accent: oklch(0.18 0.03 265);
-  --sidebar-accent-foreground: oklch(0.88 0.01 265);
-  --sidebar-border: oklch(0.22 0.03 265);
-  --sidebar-ring: oklch(0.78 0.15 75);
+
+  /* Border — línea de pincel sumi muy suave */
+  --border: oklch(0.88 0.012 80);
+  --input: oklch(0.96 0.008 85);
+  --ring: oklch(0.22 0.018 60);
+
+  /* Charts — paleta natural japonesa */
+  --chart-1: oklch(0.55 0.12 145);  /* bambú */
+  --chart-2: oklch(0.60 0.10 200);  /* agua */
+  --chart-3: oklch(0.65 0.14 25);   /* torii */
+  --chart-4: oklch(0.70 0.10 300);  /* iris */
+  --chart-5: oklch(0.55 0.08 60);   /* madera */
+
+  /* Sidebar — shoji (panel translúcido) */
+  --sidebar: oklch(0.97 0.008 82);
+  --sidebar-foreground: oklch(0.22 0.015 60);
+  --sidebar-primary: oklch(0.22 0.018 60);
+  --sidebar-primary-foreground: oklch(0.975 0.008 85);
+  --sidebar-accent: oklch(0.945 0.022 15);
+  --sidebar-accent-foreground: oklch(0.28 0.02 20);
+  --sidebar-border: oklch(0.88 0.012 80);
+  --sidebar-ring: oklch(0.22 0.018 60);
 }
 
 .dark {
-  /* Same as root - already dark by default */
-  --background: oklch(0.10 0.025 265);
-  --foreground: oklch(0.93 0.01 265);
+  /* ─── Modo oscuro: noche de jardín zen ─── */
+  --background: oklch(0.10 0.012 60);
+  --foreground: oklch(0.92 0.008 80);
+  --card: oklch(0.13 0.014 60);
+  --card-foreground: oklch(0.92 0.008 80);
+  --popover: oklch(0.13 0.014 60);
+  --popover-foreground: oklch(0.92 0.008 80);
+  --primary: oklch(0.88 0.025 80);
+  --primary-foreground: oklch(0.10 0.012 60);
+  --secondary: oklch(0.20 0.020 70);
+  --secondary-foreground: oklch(0.85 0.012 80);
+  --muted: oklch(0.17 0.015 65);
+  --muted-foreground: oklch(0.55 0.018 75);
+  --accent: oklch(0.20 0.025 15);
+  --accent-foreground: oklch(0.88 0.012 15);
+  --destructive: oklch(0.50 0.18 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.22 0.018 65);
+  --input: oklch(0.17 0.015 65);
+  --ring: oklch(0.88 0.025 80);
+  --sidebar: oklch(0.12 0.012 60);
+  --sidebar-foreground: oklch(0.92 0.008 80);
+  --sidebar-primary: oklch(0.88 0.025 80);
+  --sidebar-primary-foreground: oklch(0.10 0.012 60);
+  --sidebar-accent: oklch(0.20 0.025 15);
+  --sidebar-accent-foreground: oklch(0.88 0.012 15);
+  --sidebar-border: oklch(0.22 0.018 65);
+  --sidebar-ring: oklch(0.88 0.025 80);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    /* Suaviza el renderizado de fuentes para tipografía japonesa */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
   body {
     @apply bg-background text-foreground;
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', system-ui, sans-serif;
+    font-weight: 300;
+    letter-spacing: 0.01em;
+    line-height: 1.8;
   }
   h1, h2, h3 {
-    font-family: 'Playfair Display', Georgia, serif;
+    font-family: 'Shippori Mincho', 'Noto Serif JP', Georgia, serif;
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+  }
+  h4, h5, h6 {
+    font-family: 'Noto Sans JP', system-ui, sans-serif;
+    font-weight: 400;
+    letter-spacing: 0.03em;
   }
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),
@@ -111,108 +184,268 @@
 }
 
 @layer components {
-  /**
-   * Custom container utility that centers content and adds responsive padding.
-   *
-   * This overrides Tailwind's default container behavior to:
-   * - Auto-center content (mx-auto)
-   * - Add responsive horizontal padding
-   * - Set max-width for large screens
-   *
-   * Usage: <div className="container">...</div>
-   *
-   * For custom widths, use max-w-* utilities directly:
-   * <div className="max-w-6xl mx-auto px-4">...</div>
-   */
   .container {
     width: 100%;
     margin-left: auto;
     margin-right: auto;
-    padding-left: 1rem; /* 16px - mobile padding */
-    padding-right: 1rem;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
   }
-
   .flex {
     min-height: 0;
     min-width: 0;
   }
-
   @media (min-width: 640px) {
     .container {
-      padding-left: 1.5rem; /* 24px - tablet padding */
-      padding-right: 1.5rem;
+      padding-left: 2rem;
+      padding-right: 2rem;
     }
   }
-
   @media (min-width: 1024px) {
     .container {
-      padding-left: 2rem; /* 32px - desktop padding */
-      padding-right: 2rem;
-      max-width: 1280px; /* Standard content width */
+      padding-left: 3rem;
+      padding-right: 3rem;
+      max-width: 1280px;
     }
   }
 }
-/* ─── Elevation Custom Utilities ─── */
-@layer utilities {
-  .font-display { font-family: 'Playfair Display', Georgia, serif; }
-  .font-script { font-family: 'Dancing Script', cursive; }
 
+/* ─── Elevation — Utilidades de Diseño Japonés ─── */
+@layer utilities {
+
+  /* Tipografía */
+  .font-display {
+    font-family: 'Shippori Mincho', 'Noto Serif JP', Georgia, serif;
+    letter-spacing: 0.04em;
+  }
+  .font-body {
+    font-family: 'Noto Sans JP', system-ui, sans-serif;
+    letter-spacing: 0.01em;
+  }
+
+  /* ─── Shoji Glass: panel translúcido de papel de arroz ─── */
   .glass {
-    background: oklch(0.15 0.025 265 / 0.7);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid oklch(1 0 0 / 0.08);
+    background: oklch(0.99 0.004 80 / 0.82);
+    backdrop-filter: blur(20px) saturate(1.2);
+    -webkit-backdrop-filter: blur(20px) saturate(1.2);
+    border: 1px solid oklch(0.85 0.010 80 / 0.6);
   }
   .glass-light {
-    background: oklch(0.18 0.025 265 / 0.5);
+    background: oklch(0.99 0.004 80 / 0.55);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border: 1px solid oklch(1 0 0 / 0.06);
+    border: 1px solid oklch(0.88 0.008 80 / 0.4);
   }
+  .dark .glass {
+    background: oklch(0.15 0.014 60 / 0.80);
+    border: 1px solid oklch(1 0 0 / 0.07);
+  }
+  .dark .glass-light {
+    background: oklch(0.18 0.014 60 / 0.55);
+    border: 1px solid oklch(1 0 0 / 0.05);
+  }
+
+  /* ─── Washi: textura de papel de arroz ─── */
+  .bg-washi {
+    background-color: oklch(0.975 0.008 85);
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='400' height='400' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+  }
+
+  /* ─── Gradiente de amanecer japonés ─── */
+  .bg-sanctuary {
+    background:
+      radial-gradient(ellipse at 30% 0%, oklch(0.96 0.030 25 / 0.35) 0%, transparent 55%),
+      radial-gradient(ellipse at 70% 100%, oklch(0.94 0.020 100 / 0.25) 0%, transparent 50%),
+      radial-gradient(ellipse at 50% 50%, oklch(0.97 0.012 60 / 0.15) 0%, transparent 70%),
+      oklch(0.975 0.008 85);
+  }
+  .dark .bg-sanctuary {
+    background:
+      radial-gradient(ellipse at 30% 0%, oklch(0.20 0.030 25 / 0.30) 0%, transparent 55%),
+      radial-gradient(ellipse at 70% 100%, oklch(0.18 0.020 100 / 0.20) 0%, transparent 50%),
+      oklch(0.10 0.012 60);
+  }
+
+  /* ─── Gradiente de texto sumi ─── */
+  .text-sumi-gradient {
+    background: linear-gradient(135deg, oklch(0.18 0.018 60) 0%, oklch(0.35 0.025 50) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .dark .text-sumi-gradient {
+    background: linear-gradient(135deg, oklch(0.92 0.015 80) 0%, oklch(0.78 0.025 70) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Mantener compatibilidad con clases existentes */
   .text-gold-gradient {
+    background: linear-gradient(135deg, oklch(0.55 0.10 60) 0%, oklch(0.38 0.08 50) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .dark .text-gold-gradient {
     background: linear-gradient(135deg, oklch(0.88 0.18 80) 0%, oklch(0.72 0.14 55) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
-  .bg-sanctuary {
-    background:
-      radial-gradient(ellipse at 20% 50%, oklch(0.18 0.06 265 / 0.8) 0%, transparent 60%),
-      radial-gradient(ellipse at 80% 20%, oklch(0.15 0.05 295 / 0.6) 0%, transparent 50%),
-      radial-gradient(ellipse at 60% 80%, oklch(0.12 0.04 165 / 0.4) 0%, transparent 40%),
-      oklch(0.10 0.025 265);
+
+  /* ─── Sombras sutiles (no box-shadow agresivo) ─── */
+  .shadow-washi {
+    box-shadow:
+      0 1px 2px oklch(0.18 0.015 60 / 0.04),
+      0 4px 16px oklch(0.18 0.015 60 / 0.06),
+      0 0 0 1px oklch(0.18 0.015 60 / 0.03);
   }
-  .glow-gold { box-shadow: 0 0 20px oklch(0.78 0.15 75 / 0.3); }
-  .glow-gold-sm { box-shadow: 0 0 10px oklch(0.78 0.15 75 / 0.2); }
+  .shadow-washi-md {
+    box-shadow:
+      0 2px 4px oklch(0.18 0.015 60 / 0.05),
+      0 8px 32px oklch(0.18 0.015 60 / 0.08),
+      0 0 0 1px oklch(0.18 0.015 60 / 0.04);
+  }
+  .dark .shadow-washi {
+    box-shadow:
+      0 1px 2px oklch(0 0 0 / 0.15),
+      0 4px 16px oklch(0 0 0 / 0.20);
+  }
+  .dark .shadow-washi-md {
+    box-shadow:
+      0 2px 4px oklch(0 0 0 / 0.20),
+      0 8px 32px oklch(0 0 0 / 0.28);
+  }
+
+  /* Compatibilidad con clases glow existentes */
+  .glow-gold {
+    box-shadow: 0 0 24px oklch(0.55 0.10 60 / 0.20);
+  }
+  .glow-gold-sm {
+    box-shadow: 0 0 12px oklch(0.55 0.10 60 / 0.12);
+  }
+  .dark .glow-gold {
+    box-shadow: 0 0 24px oklch(0.78 0.15 75 / 0.28);
+  }
+  .dark .glow-gold-sm {
+    box-shadow: 0 0 12px oklch(0.78 0.15 75 / 0.18);
+  }
+
+  /* ─── Divisor de pincel sumi ─── */
+  .divider-sumi {
+    height: 1px;
+    background: linear-gradient(90deg,
+      transparent 0%,
+      oklch(0.72 0.012 70 / 0.6) 30%,
+      oklch(0.72 0.012 70 / 0.6) 70%,
+      transparent 100%
+    );
+  }
+  .dark .divider-sumi {
+    background: linear-gradient(90deg,
+      transparent 0%,
+      oklch(0.38 0.015 70 / 0.5) 30%,
+      oklch(0.38 0.015 70 / 0.5) 70%,
+      transparent 100%
+    );
+  }
+
+  /* ─── Botón primario japonés ─── */
+  .btn-sumi {
+    background: oklch(0.22 0.018 60);
+    color: oklch(0.975 0.008 85);
+    border: none;
+    transition: background 0.3s ease, transform 0.2s ease;
+  }
+  .btn-sumi:hover {
+    background: oklch(0.30 0.020 60);
+    transform: translateY(-1px);
+  }
+  .dark .btn-sumi {
+    background: oklch(0.88 0.025 80);
+    color: oklch(0.10 0.012 60);
+  }
+  .dark .btn-sumi:hover {
+    background: oklch(0.95 0.015 80);
+  }
 }
 
-/* ─── Scrollbar ─── */
-::-webkit-scrollbar { width: 5px; }
+/* ─── Scrollbar — trazo de pincel ─── */
+::-webkit-scrollbar { width: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: oklch(0.28 0.04 265); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: oklch(0.38 0.05 265); }
-
-/* ─── Animations ─── */
-@keyframes typing-dot {
-  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-  30% { transform: translateY(-5px); opacity: 1; }
+::-webkit-scrollbar-thumb {
+  background: oklch(0.75 0.012 70);
+  border-radius: 2px;
 }
-.typing-dot { animation: typing-dot 1.4s ease-in-out infinite; }
-.typing-dot:nth-child(2) { animation-delay: 0.2s; }
-.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.55 0.015 65);
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: oklch(0.30 0.015 65);
+}
+
+/* ─── Animaciones ─── */
+@keyframes typing-dot {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.3; }
+  30% { transform: translateY(-4px); opacity: 0.8; }
+}
+.typing-dot { animation: typing-dot 1.6s ease-in-out infinite; }
+.typing-dot:nth-child(2) { animation-delay: 0.25s; }
+.typing-dot:nth-child(3) { animation-delay: 0.5s; }
 
 @keyframes float-up {
-  0% { transform: translateY(8px); opacity: 0; }
+  0% { transform: translateY(10px); opacity: 0; }
   100% { transform: translateY(0); opacity: 1; }
 }
-.animate-float-up { animation: float-up 0.4s ease-out forwards; }
+.animate-float-up { animation: float-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
 
-/* ─── Message bubbles ─── */
+/* Entrada suave de página */
+@keyframes page-enter {
+  0% { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.animate-page-enter { animation: page-enter 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+
+/* ─── Burbujas de mensaje ─── */
 .message-user {
-  background: linear-gradient(135deg, oklch(0.78 0.15 75) 0%, oklch(0.68 0.13 60) 100%);
-  color: oklch(0.10 0.025 265);
+  background: oklch(0.22 0.018 60);
+  color: oklch(0.975 0.008 85);
+  border-radius: 1rem 1rem 0.25rem 1rem;
+}
+.dark .message-user {
+  background: oklch(0.28 0.020 60);
+  color: oklch(0.92 0.008 80);
 }
 .message-assistant {
-  background: oklch(0.17 0.03 265 / 0.85);
-  border: 1px solid oklch(1 0 0 / 0.08);
+  background: oklch(0.985 0.006 80);
+  border: 1px solid oklch(0.88 0.010 80);
+  border-radius: 1rem 1rem 1rem 0.25rem;
+  color: oklch(0.22 0.015 60);
+}
+.dark .message-assistant {
+  background: oklch(0.15 0.014 60 / 0.85);
+  border: 1px solid oklch(1 0 0 / 0.07);
+  color: oklch(0.90 0.008 80);
+}
+
+/* ─── Input de chat ─── */
+.chat-input {
+  background: oklch(0.985 0.006 80);
+  border: 1px solid oklch(0.85 0.010 80);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+.chat-input:focus {
+  border-color: oklch(0.50 0.018 60);
+  box-shadow: 0 0 0 3px oklch(0.22 0.018 60 / 0.08);
+  outline: none;
+}
+.dark .chat-input {
+  background: oklch(0.17 0.015 65);
+  border-color: oklch(0.28 0.018 65);
+}
+.dark .chat-input:focus {
+  border-color: oklch(0.65 0.020 75);
+  box-shadow: 0 0 0 3px oklch(0.88 0.025 80 / 0.10);
 }

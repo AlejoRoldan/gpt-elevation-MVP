@@ -10,6 +10,9 @@
  *        Session cookies: HttpOnly + Secure + SameSite=Strict.
  * - A03: All inputs validated and sanitized via Zod before DB access.
  * - A04: Rate limiting is applied at the Express middleware layer (see index.ts).
+ *
+ * Preview mode: When DATABASE_URL is not set, uses an in-memory store so the
+ * platform can be demonstrated without a running database.
  */
 
 import { z } from "zod";
@@ -22,6 +25,7 @@ import { hashPassword, verifyPassword } from "../../infrastructure/passwordServi
 import { encryptEmail, decryptEmail, isEncryptedEmail } from "../../infrastructure/emailEncryption";
 import { sdk } from "../../_core/sdk";
 import { getDb } from "../../db";
+import { memoryStore } from "../../infrastructure/memoryStore";
 import { users } from "../../../drizzle/schema";
 import { eq } from "drizzle-orm";
 
@@ -53,14 +57,14 @@ function buildEmailOpenId(email: string): string {
 }
 
 /**
- * Finds a user by their encrypted email address.
+ * Finds a user by their encrypted email address (database mode).
  *
  * NOTE: This performs a full-table scan because emails are stored encrypted.
  * For production scale, add an HMAC-SHA256 index column alongside the
  * encrypted email to enable O(1) lookup. The HMAC key must differ from
  * the AES encryption key.
  */
-async function findUserByEmail(email: string) {
+async function findUserByEmailInDb(email: string) {
   const db = await getDb();
   if (!db) return null;
 
@@ -83,6 +87,16 @@ async function findUserByEmail(email: string) {
   return null;
 }
 
+/**
+ * Unified user lookup — tries DB first, falls back to memory store.
+ */
+async function findUserByEmail(email: string) {
+  if (memoryStore.isEnabled()) {
+    return memoryStore.findByEmail(email);
+  }
+  return findUserByEmailInDb(email);
+}
+
 // ─── Router ───────────────────────────────────────────────────────────────────
 
 export const manualAuthRouter = router({
@@ -93,14 +107,6 @@ export const manualAuthRouter = router({
   register: publicProcedure
     .input(registerSchema)
     .mutation(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Servicio temporalmente no disponible",
-        });
-      }
-
       // Check for duplicate email (user enumeration is acceptable at registration)
       const existing = await findUserByEmail(input.email);
       if (existing) {
@@ -117,15 +123,37 @@ export const manualAuthRouter = router({
 
       const openId = buildEmailOpenId(input.email);
 
-      await db.insert(users).values({
-        openId,
-        name: input.name,
-        email: encryptedEmail,
-        passwordHash,
-        loginMethod: "email",
-        role: "user",
-        lastSignedIn: new Date(),
-      });
+      if (memoryStore.isEnabled()) {
+        // Preview mode: store in memory
+        memoryStore.create({
+          openId,
+          name: input.name,
+          email: encryptedEmail,
+          passwordHash,
+          loginMethod: "email",
+          role: "user",
+          lastSignedIn: new Date(),
+        });
+        console.log(`[Auth] Preview mode: registered user ${input.email} in memory store`);
+      } else {
+        // Production mode: store in database
+        const db = await getDb();
+        if (!db) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Servicio temporalmente no disponible",
+          });
+        }
+        await db.insert(users).values({
+          openId,
+          name: input.name,
+          email: encryptedEmail,
+          passwordHash,
+          loginMethod: "email",
+          role: "user",
+          lastSignedIn: new Date(),
+        });
+      }
 
       // Issue session JWT using the existing SDK session signing
       const token = await sdk.signSession(
@@ -162,12 +190,16 @@ export const manualAuthRouter = router({
       }
 
       // Update last sign-in timestamp
-      const db = await getDb();
-      if (db) {
-        await db
-          .update(users)
-          .set({ lastSignedIn: new Date() })
-          .where(eq(users.id, user.id));
+      if (memoryStore.isEnabled()) {
+        memoryStore.updateLastSignedIn(user.openId);
+      } else {
+        const db = await getDb();
+        if (db) {
+          await db
+            .update(users)
+            .set({ lastSignedIn: new Date() })
+            .where(eq(users.id, user.id));
+        }
       }
 
       const token = await sdk.signSession(

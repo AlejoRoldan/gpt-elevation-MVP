@@ -1,114 +1,176 @@
+/**
+ * Home — Landing page
+ * Diseño: Minimalismo japonés (wabi-sabi, ma, shibui)
+ * Paleta: Washi paper, tinta sumi, sakura, bambú
+ */
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { getLoginUrl } from "@/const";
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
-import { Sparkles, Shield, Heart, BookOpen, BarChart2, ArrowRight } from "lucide-react";
-
+import { Shield, Heart, BookOpen, BarChart2, ArrowRight } from "lucide-react";
 import type { Variants } from "framer-motion";
 
 const fadeUp: Variants = {
-  hidden: { opacity: 0, y: 24 },
-  visible: (i: number = 0) => ({ opacity: 1, y: 0, transition: { delay: i * 0.12, duration: 0.6, ease: [0.22, 1, 0.36, 1] } }),
+  hidden: { opacity: 0, y: 18 },
+  visible: (i: number = 0) => ({
+    opacity: 1,
+    y: 0,
+    transition: { delay: i * 0.14, duration: 0.7, ease: [0.22, 1, 0.36, 1] },
+  }),
+};
+
+const fadeIn: Variants = {
+  hidden: { opacity: 0 },
+  visible: (i: number = 0) => ({
+    opacity: 1,
+    transition: { delay: i * 0.10, duration: 0.8, ease: "easeOut" },
+  }),
 };
 
 export default function Home() {
-  const { user, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [, navigate] = useLocation();
 
   const handleEnter = () => {
     if (isAuthenticated) {
       navigate("/chat");
     } else {
-      window.location.href = getLoginUrl();
+      navigate("/login");
     }
   };
 
   const features = [
     {
-      icon: <Heart className="w-5 h-5" />,
+      kanji: "心",
+      reading: "kokoro",
       title: "Acompañamiento empático",
       desc: "Una IA entrenada con principios de psicología humanista que te escucha sin juicio y te invita a explorar tu mundo interior.",
     },
     {
-      icon: <Shield className="w-5 h-5" />,
-      title: "Privacidad por diseño",
-      desc: "Tus datos nunca llegan sin anonimizar a servicios externos. Tú controlas qué se guarda y puedes borrar todo en cualquier momento.",
+      kanji: "間",
+      reading: "ma",
+      title: "Espacio de silencio",
+      desc: "El silencio entre las palabras tiene tanto valor como las palabras mismas. Aquí, el ritmo es tuyo.",
     },
     {
-      icon: <BookOpen className="w-5 h-5" />,
+      kanji: "省",
+      reading: "hansei",
       title: "Reflexiones guardadas",
       desc: "Captura los momentos de claridad con etiquetas temáticas. Tu diario de crecimiento personal, siempre contigo.",
     },
     {
-      icon: <BarChart2 className="w-5 h-5" />,
-      title: "Insights emocionales",
+      kanji: "道",
+      reading: "michi",
+      title: "Insights del camino",
       desc: "Visualiza tu evolución a lo largo del tiempo. Patrones de bienestar que te ayudan a conocerte mejor.",
     },
   ];
 
   return (
     <div className="min-h-screen bg-sanctuary text-foreground overflow-hidden">
-      {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4 glass border-b border-white/5">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-5 h-5 text-primary" />
-          <span className="font-display text-lg font-medium text-primary">Elevation</span>
-        </div>
-        <div className="flex items-center gap-3">
+
+      {/* ─── Navegación ─── */}
+      <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-8 py-5 glass border-b border-border/40">
+        <motion.div
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+          className="flex items-center gap-3"
+        >
+          <span className="font-display text-xl text-foreground/60 select-none">昇</span>
+          <span className="font-display text-sm tracking-[0.2em] text-foreground/60 uppercase">Elevation</span>
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, x: 10 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+        >
           {isAuthenticated ? (
-            <Button onClick={() => navigate("/chat")} size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
+            <Button
+              onClick={() => navigate("/chat")}
+              size="sm"
+              variant="ghost"
+              className="text-foreground/60 hover:text-foreground hover:bg-accent/50 tracking-wider text-xs uppercase"
+            >
               Ir al espacio
             </Button>
           ) : (
-            <Button onClick={handleEnter} size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
+            <Button
+              onClick={handleEnter}
+              size="sm"
+              variant="ghost"
+              className="text-foreground/60 hover:text-foreground hover:bg-accent/50 tracking-wider text-xs uppercase"
+            >
               Entrar
             </Button>
           )}
-        </div>
+        </motion.div>
       </nav>
 
-      {/* Hero */}
+      {/* ─── Hero ─── */}
       <section className="relative min-h-screen flex flex-col items-center justify-center px-6 pt-20">
-        {/* Ambient orbs */}
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full opacity-10 blur-3xl"
-          style={{ background: "radial-gradient(circle, oklch(0.78 0.15 75), transparent)" }} />
-        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full opacity-8 blur-3xl"
-          style={{ background: "radial-gradient(circle, oklch(0.55 0.14 265), transparent)" }} />
+        {/* Manchas de tinta difuminadas */}
+        <div
+          className="absolute top-1/3 left-1/3 w-[500px] h-[500px] rounded-full opacity-[0.06] blur-[80px] pointer-events-none"
+          style={{ background: "radial-gradient(circle, oklch(0.55 0.12 25), transparent)" }}
+        />
+        <div
+          className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] rounded-full opacity-[0.05] blur-[60px] pointer-events-none"
+          style={{ background: "radial-gradient(circle, oklch(0.55 0.10 145), transparent)" }}
+        />
 
-        <div className="relative z-10 max-w-3xl mx-auto text-center">
+        <div className="relative z-10 max-w-2xl mx-auto text-center">
+          {/* Kanji decorativo de fondo */}
           <motion.div
+            variants={fadeIn}
+            initial="hidden"
+            animate="visible"
+            custom={0}
+            className="absolute -top-16 left-1/2 -translate-x-1/2 font-display text-[180px] leading-none text-foreground/[0.025] select-none pointer-events-none"
+            aria-hidden
+          >
+            昇
+          </motion.div>
+
+          <motion.p
             variants={fadeUp}
             initial="hidden"
             animate="visible"
             custom={0}
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass text-sm text-muted-foreground mb-8"
+            className="text-xs tracking-[0.25em] uppercase text-muted-foreground mb-10 font-body"
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-            Bienestar emocional con IA ética
-          </motion.div>
+            Bienestar emocional · IA ética · Privacidad total
+          </motion.p>
 
           <motion.h1
             variants={fadeUp}
             initial="hidden"
             animate="visible"
             custom={1}
-            className="font-display text-5xl md:text-7xl font-medium leading-tight mb-6"
+            className="font-display text-5xl md:text-6xl font-light leading-[1.25] mb-6 text-foreground"
           >
             Un espacio para{" "}
-            <span className="text-gold-gradient italic">encontrarte</span>
+            <em className="not-italic text-sumi-gradient">encontrarte</em>
             <br />contigo mismo
           </motion.h1>
+
+          <motion.div
+            variants={fadeIn}
+            initial="hidden"
+            animate="visible"
+            custom={2}
+            className="divider-sumi max-w-[120px] mx-auto my-8"
+          />
 
           <motion.p
             variants={fadeUp}
             initial="hidden"
             animate="visible"
             custom={2}
-            className="text-lg md:text-xl text-muted-foreground leading-relaxed mb-10 max-w-2xl mx-auto"
+            className="text-base text-muted-foreground leading-relaxed mb-12 max-w-lg mx-auto font-light"
           >
-            Elevation es un acompañante de bienestar emocional que combina la profundidad de la psicología humanista
-            con la disponibilidad de la inteligencia artificial, siempre desde la ética y el respeto a tu privacidad.
+            Elevation es un compañero de reflexión basado en IA, guiado por los principios
+            de la Terapia de Aceptación y Compromiso. Sin prisa. Sin juicio.
           </motion.p>
 
           <motion.div
@@ -116,41 +178,91 @@ export default function Home() {
             initial="hidden"
             animate="visible"
             custom={3}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4"
+            className="flex flex-col sm:flex-row items-center justify-center gap-6"
           >
             <Button
               onClick={handleEnter}
-              size="lg"
-              className="bg-primary text-primary-foreground hover:bg-primary/90 px-8 py-6 text-base rounded-full glow-gold-sm transition-all duration-300 hover:glow-gold"
+              className="btn-sumi px-10 py-5 text-xs tracking-widest uppercase rounded-sm shadow-washi hover:shadow-washi-md transition-all duration-300"
             >
-              Comenzar mi camino
-              <ArrowRight className="ml-2 w-4 h-4" />
+              Comenzar
+              <ArrowRight className="ml-3 w-3 h-3" />
             </Button>
-            <Button
-              variant="ghost"
-              size="lg"
+            <button
               onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })}
-              className="text-muted-foreground hover:text-foreground px-8 py-6 text-base rounded-full"
+              className="text-xs tracking-[0.2em] uppercase text-muted-foreground hover:text-foreground transition-colors duration-300"
             >
               Conocer más
-            </Button>
+            </button>
           </motion.div>
         </div>
 
-        {/* Scroll indicator */}
+        {/* Scroll hint */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 1.5 }}
-          className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-muted-foreground"
+          transition={{ delay: 1.5, duration: 1 }}
+          className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2"
         >
-          <div className="w-px h-8 bg-gradient-to-b from-transparent to-muted-foreground/50" />
+          <div className="w-px h-12 bg-gradient-to-b from-transparent via-border to-transparent" />
         </motion.div>
       </section>
 
-      {/* Features */}
-      <section id="features" className="py-24 px-6">
-        <div className="max-w-5xl mx-auto">
+      {/* ─── Features ─── */}
+      <section id="features" className="py-32 px-6">
+        <div className="max-w-4xl mx-auto">
+          <motion.div
+            variants={fadeUp}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            className="text-center mb-20"
+          >
+            <p className="text-xs tracking-[0.25em] uppercase text-muted-foreground mb-4 font-body">
+              Principios
+            </p>
+            <h2 className="font-display text-3xl md:text-4xl font-light text-foreground">
+              Diseñado con intención
+            </h2>
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-border/40">
+            {features.map((f, i) => (
+              <motion.div
+                key={f.kanji}
+                variants={fadeUp}
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true }}
+                custom={i * 0.15}
+                className="bg-background p-10 group hover:bg-accent/20 transition-colors duration-500"
+              >
+                <div className="flex items-start gap-6">
+                  <div className="flex-shrink-0 text-center">
+                    <span className="font-display text-4xl text-foreground/20 group-hover:text-foreground/40 transition-colors duration-500 block leading-none">
+                      {f.kanji}
+                    </span>
+                    <span className="text-[10px] tracking-widest text-muted-foreground/50 uppercase mt-1 block font-body">
+                      {f.reading}
+                    </span>
+                  </div>
+                  <div>
+                    <h3 className="font-display text-base font-medium text-foreground mb-2 tracking-wide">
+                      {f.title}
+                    </h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed font-light">
+                      {f.desc}
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Privacidad ─── */}
+      <section className="py-32 px-6 bg-accent/10">
+        <div className="max-w-3xl mx-auto">
           <motion.div
             variants={fadeUp}
             initial="hidden"
@@ -158,107 +270,83 @@ export default function Home() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <h2 className="font-display text-4xl font-medium mb-4">
-              Diseñado con <span className="text-gold-gradient">cuidado</span>
+            <p className="text-xs tracking-[0.25em] uppercase text-muted-foreground mb-4 font-body">
+              Privacidad
+            </p>
+            <h2 className="font-display text-3xl md:text-4xl font-light text-foreground mb-6">
+              Tu identidad es{" "}
+              <em className="not-italic text-sumi-gradient">sagrada</em>
             </h2>
-            <p className="text-muted-foreground text-lg max-w-xl mx-auto">
-              Cada decisión de diseño y tecnología está guiada por principios de trauma-informed care y ética de datos.
+            <p className="text-sm text-muted-foreground leading-relaxed max-w-xl mx-auto font-light">
+              Implementamos una bóveda de identidad de cero conocimiento. Tus datos personales
+              nunca llegan a servicios externos de IA.
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {features.map((f, i) => (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-border/40">
+            {[
+              { icon: <Shield className="w-4 h-4" />, label: "Consentimiento granular", desc: "Tú decides qué datos se guardan, punto por punto." },
+              { icon: <Heart className="w-4 h-4" />, label: "Derecho al olvido", desc: "Borra tu cuenta y todos tus datos en cualquier momento." },
+              { icon: <BookOpen className="w-4 h-4" />, label: "Sin venta de datos", desc: "Tus conversaciones nunca se usan para entrenar modelos externos." },
+            ].map((item, i) => (
               <motion.div
-                key={f.title}
+                key={item.label}
                 variants={fadeUp}
                 initial="hidden"
                 whileInView="visible"
                 viewport={{ once: true }}
-                custom={i * 0.5}
-                className="glass rounded-2xl p-6 hover:border-primary/20 transition-all duration-300 group"
+                custom={i * 0.15}
+                className="bg-background p-8 text-left"
               >
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary mb-4 group-hover:bg-primary/20 transition-colors">
-                  {f.icon}
-                </div>
-                <h3 className="font-display text-xl font-medium mb-2">{f.title}</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">{f.desc}</p>
+                <div className="text-muted-foreground/50 mb-4">{item.icon}</div>
+                <p className="text-sm font-medium text-foreground mb-2 tracking-wide">{item.label}</p>
+                <p className="text-xs text-muted-foreground leading-relaxed font-light">{item.desc}</p>
               </motion.div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Ethics section */}
-      <section className="py-24 px-6">
-        <div className="max-w-3xl mx-auto text-center">
-          <motion.div
-            variants={fadeUp}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
-          >
-            <Shield className="w-12 h-12 text-primary mx-auto mb-6 opacity-80" />
-            <h2 className="font-display text-4xl font-medium mb-6">
-              Tu privacidad es <span className="text-gold-gradient">sagrada</span>
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-10">
-              {[
-                { label: "Consentimiento granular", desc: "Tú decides qué datos se guardan, punto por punto." },
-                { label: "Derecho al olvido", desc: "Borra tu cuenta y todos tus datos en cualquier momento." },
-                { label: "Sin venta de datos", desc: "Tus conversaciones nunca se usan para entrenar modelos externos." },
-              ].map((item, i) => (
-                <motion.div
-                  key={item.label}
-                  variants={fadeUp}
-                  initial="hidden"
-                  whileInView="visible"
-                  viewport={{ once: true }}
-                  custom={i * 0.3}
-                  className="glass-light rounded-xl p-5 text-left"
-                >
-                  <div className="w-2 h-2 rounded-full bg-primary mb-3" />
-                  <p className="font-medium text-sm mb-1">{item.label}</p>
-                  <p className="text-muted-foreground text-xs leading-relaxed">{item.desc}</p>
-                </motion.div>
-              ))}
-            </div>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* CTA Final */}
-      <section className="py-24 px-6">
+      {/* ─── CTA Final ─── */}
+      <section className="py-40 px-6">
         <motion.div
           variants={fadeUp}
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true }}
-          className="max-w-2xl mx-auto text-center glass rounded-3xl p-12"
+          className="max-w-xl mx-auto text-center"
         >
-          <h2 className="font-display text-4xl font-medium mb-4">
+          <div className="font-display text-8xl text-foreground/[0.04] mb-8 select-none" aria-hidden>
+            始
+          </div>
+          <h2 className="font-display text-3xl md:text-4xl font-light text-foreground mb-4">
             ¿Listo para comenzar?
           </h2>
-          <p className="text-muted-foreground mb-8 leading-relaxed">
+          <div className="divider-sumi max-w-[80px] mx-auto my-6" />
+          <p className="text-sm text-muted-foreground mb-12 leading-relaxed font-light">
             El primer paso es el más importante. Elevation te acompaña con respeto, sin prisa y sin juicio.
           </p>
           <Button
             onClick={handleEnter}
-            size="lg"
-            className="bg-primary text-primary-foreground hover:bg-primary/90 px-10 py-6 text-base rounded-full glow-gold-sm hover:glow-gold transition-all duration-300"
+            className="btn-sumi px-12 py-5 text-xs tracking-widest uppercase rounded-sm shadow-washi hover:shadow-washi-md transition-all duration-300"
           >
             Comenzar ahora
-            <ArrowRight className="ml-2 w-4 h-4" />
+            <ArrowRight className="ml-3 w-3 h-3" />
           </Button>
         </motion.div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-white/5 py-8 px-6 text-center text-muted-foreground text-sm">
-        <div className="flex items-center justify-center gap-2 mb-2">
-          <Sparkles className="w-4 h-4 text-primary/60" />
-          <span className="font-display text-primary/60">Elevation</span>
+      {/* ─── Footer ─── */}
+      <footer className="border-t border-border/40 py-10 px-6 text-center">
+        <div className="flex items-center justify-center gap-3 mb-3">
+          <span className="font-display text-lg text-foreground/25">昇</span>
+          <span className="text-xs tracking-[0.25em] uppercase text-muted-foreground/50 font-body">
+            Elevation
+          </span>
         </div>
-        <p className="text-xs">Diseñado con ética, privacidad y cuidado humano.</p>
+        <p className="text-xs text-muted-foreground/40 font-light">
+          Diseñado con ética, privacidad y cuidado humano.
+        </p>
       </footer>
     </div>
   );
