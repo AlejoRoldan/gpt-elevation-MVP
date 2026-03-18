@@ -213,7 +213,7 @@ app.get('/api/messages', verificarToken, async (req, res) => {
 const PORT = process.env.PORT || 8080;
 
 // Arrancamos el servidor
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Elevation está en el aire en el puerto ${PORT}`);
     console.log(`🌍 Conectado al cerebro de IA y listo para el cliente.`);
 });
