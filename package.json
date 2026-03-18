@@ -3,7 +3,17 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "install": "cd backend && npm install && cd ../frontend && npm install --legacy-peer-deps",
+    "install": "cd frontend && npm install --legacy-peer-deps",
     "build": "cd frontend && npm run build"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "jsonwebtoken": "^9.0.2",
+    "sqlite3": "^5.1.7",
+    "sequelize": "^6.37.3",
+    "bcryptjs": "^2.4.3",
+    "@anthropic-ai/sdk": "^0.33.1"
   }
 }
