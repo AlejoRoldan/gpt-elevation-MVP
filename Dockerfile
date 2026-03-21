@@ -8,7 +8,7 @@ WORKDIR /app
 COPY . .
 
 # 4. LA ORDEN SUPREMA: Tatuamos la URL en la memoria global de la máquina
-ENV VITE_API_URL="https://elevation-ia-747531656650.us-central1.run.app"
+RUN cd backend && npm install
 
 # 5. Magia del Frontend: Instalamos y horneamos (Vite absorberá la variable global)
 RUN cd frontend && npm install --legacy-peer-deps && npm run build
