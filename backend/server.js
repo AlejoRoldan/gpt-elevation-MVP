@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const Anthropic = require('@anthropic-ai/sdk');
 const { connectDB, sequelize } = require('./database');
 const User = require('./User');
@@ -12,7 +13,7 @@ const { PromptVault, getActivePrompt } = require('./promptVault');
 const app = express();
 
 // ==========================================
-// 🛡️ CORS — Solo acepta el dominio de Google Cloud Run
+// 🛡️ CORS
 // ==========================================
 const corsOptions = {
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
@@ -21,16 +22,55 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
+// ==========================================
+// 🔐 ENCRIPTACIÓN DE MENSAJES (AES-256-CBC)
+// Usa DB_PASS como semilla de la clave — igual que en el sistema original
+// ==========================================
+const ALGORITMO = 'aes-256-cbc';
+const KEY = Buffer.from(
+  (process.env.DB_PASS || 'default_password_2026').padEnd(32).slice(0, 32)
+);
+
+const encriptar = (texto) => {
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv(ALGORITMO, KEY, iv);
+  let encrypted = cipher.update(texto, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  return iv.toString('hex') + ':' + encrypted;
+};
+
+const desencriptar = (texto) => {
+  try {
+    const partes = texto.split(':');
+    const iv = Buffer.from(partes.shift(), 'hex');
+    const contenidoEncrypted = partes.join(':');
+    const decipher = crypto.createDecipheriv(ALGORITMO, KEY, iv);
+    let decrypted = decipher.update(contenidoEncrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  } catch (error) {
+    // Si no se puede desencriptar, devolvemos el texto tal cual
+    // Esto protege contra mensajes corruptos o no encriptados
+    console.error('⚠️ Error desencriptando mensaje:', error.message);
+    return texto;
+  }
+};
+
+// ==========================================
+// 🤖 ANTHROPIC
+// ==========================================
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-// ✅ JWT_SECRET desde variable de entorno — nunca quemado
+// ==========================================
+// 🔑 JWT
+// ==========================================
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET no está configurado en .env');
 
 // ==========================================
-// 🗄️ CONEXIÓN BD Y SINCRONIZACIÓN DE TABLAS
+// 🗄️ CONEXIÓN BD Y SINCRONIZACIÓN
 // ==========================================
 connectDB().then(() => {
   User.hasMany(Message);
@@ -47,8 +87,17 @@ connectDB().then(() => {
 app.post('/api/register', async (req, res) => {
   try {
     const { name, email, password } = req.body;
+
+    // Verificar lista blanca de admins
+    const adminEmails = (process.env.ADMIN_EMAILS || '')
+      .split(',')
+      .map(e => e.trim().toLowerCase())
+      .filter(Boolean);
+
+    const role = adminEmails.includes(email.toLowerCase()) ? 'admin' : 'user';
+
     const hashedPassword = await bcrypt.hash(password, 10);
-    await User.create({ name, email, password: hashedPassword });
+    await User.create({ name, email, password: hashedPassword, role });
     res.status(201).json({ message: "Usuario creado exitosamente. ¡Bienvenido a Elevation!" });
   } catch (error) {
     res.status(400).json({ error: "El correo ya está registrado o hubo un error." });
@@ -64,11 +113,10 @@ app.post('/api/login', async (req, res) => {
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) return res.status(401).json({ error: "Contraseña incorrecta." });
 
-    // ✅ Incluimos el role en el token para que el frontend sepa si es admin
     const token = jwt.sign(
       { id: user.id, name: user.name, role: user.role },
       JWT_SECRET,
-      { expiresIn: '2h' }
+      { expiresIn: '8h' }
     );
     res.json({ message: "Inicio de sesión exitoso", token, name: user.name, role: user.role });
   } catch (error) {
@@ -77,7 +125,7 @@ app.post('/api/login', async (req, res) => {
 });
 
 // ==========================================
-// 👮 MIDDLEWARE — Verifica token de usuario
+// 👮 MIDDLEWARES
 // ==========================================
 const verificarToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -93,9 +141,6 @@ const verificarToken = (req, res, next) => {
   }
 };
 
-// ==========================================
-// 🔐 MIDDLEWARE — Solo admins pueden pasar
-// ==========================================
 const verificarAdmin = (req, res, next) => {
   verificarToken(req, res, () => {
     if (req.user.role !== 'admin') {
@@ -107,22 +152,25 @@ const verificarAdmin = (req, res, next) => {
 
 // ==========================================
 // 🧠 RUTA DEL CHAT
-// El system prompt viene de la BD encriptada
+// Los mensajes se encriptan antes de guardar en BD
 // ==========================================
 app.post('/api/chat', verificarToken, async (req, res) => {
   const mensajeUsuario = req.body.message;
   const userId = req.user.id;
 
   try {
-    // ✅ Leemos el prompt desde la BD — nunca del código
+    // ✅ Leemos el prompt desde la BD encriptada
     let systemPrompt = await getActivePrompt('elevation_system_prompt');
-
-    // Fallback de seguridad si aún no hay prompt en la BD
     if (!systemPrompt) {
-      systemPrompt = "Eres Elevation, un acompañante empático de bienestar emocional. Escuchas activamente y haces preguntas reflexivas.";
+      systemPrompt = "Eres Elevation, un acompañante empático de bienestar emocional. Escuchas activamente y haces preguntas reflexivas. Tus respuestas son concisas, cálidas y nunca usas emojis.";
     }
 
-    await Message.create({ role: 'user', content: mensajeUsuario, UserId: userId });
+    // ✅ Guardamos el mensaje del usuario ENCRIPTADO
+    await Message.create({
+      role: 'user',
+      content: encriptar(mensajeUsuario),
+      UserId: userId
+    });
 
     const msg = await anthropic.messages.create({
       model: "claude-3-haiku-20240307",
@@ -133,7 +181,12 @@ app.post('/api/chat', verificarToken, async (req, res) => {
 
     const respuestaIA = msg.content[0].text;
 
-    await Message.create({ role: 'assistant', content: respuestaIA, UserId: userId });
+    // ✅ Guardamos la respuesta de la IA ENCRIPTADA
+    await Message.create({
+      role: 'assistant',
+      content: encriptar(respuestaIA),
+      UserId: userId
+    });
 
     res.json({ reply: respuestaIA });
 
@@ -145,6 +198,7 @@ app.post('/api/chat', verificarToken, async (req, res) => {
 
 // ==========================================
 // 📜 HISTORIAL DE CHAT
+// Los mensajes se desencriptan al leer
 // ==========================================
 app.get('/api/messages', verificarToken, async (req, res) => {
   try {
@@ -152,10 +206,13 @@ app.get('/api/messages', verificarToken, async (req, res) => {
       where: { UserId: req.user.id },
       order: [['createdAt', 'ASC']]
     });
+
+    // ✅ Desencriptamos cada mensaje antes de enviarlo al frontend
     const historial = mensajes.map(m => ({
       role: m.role === 'assistant' ? 'bot' : 'user',
-      text: m.content
+      text: desencriptar(m.content)
     }));
+
     res.json(historial);
   } catch (error) {
     console.error("❌ Error obteniendo historial:", error);
@@ -166,8 +223,6 @@ app.get('/api/messages', verificarToken, async (req, res) => {
 // ==========================================
 // 🔐 RUTAS DEL BACKOFFICE — Solo admin
 // ==========================================
-
-// Guardar o actualizar el prompt del acompañante
 app.post('/api/admin/prompt', verificarAdmin, async (req, res) => {
   try {
     const { key, content } = req.body;
@@ -183,12 +238,10 @@ app.post('/api/admin/prompt', verificarAdmin, async (req, res) => {
   }
 });
 
-// Ver la lista de prompts (sin revelar el contenido)
 app.get('/api/admin/prompts', verificarAdmin, async (req, res) => {
   try {
     const prompts = await PromptVault.findAll({
       attributes: ['key', 'version', 'isActive', 'updatedBy', 'updatedAt']
-      // ✅ Nunca enviamos contentEncrypted al frontend
     });
     res.json(prompts);
   } catch (error) {
