@@ -1,20 +1,35 @@
 require('dotenv').config();
 const { Sequelize } = require('sequelize');
 
+const dbHost = process.env.DB_HOST || '';
+
+// Cloud Run usa Unix socket (/cloudsql/...), local usa IP directa
+const isSocket = dbHost.startsWith('/');
+
 const sequelize = new Sequelize(
   process.env.DB_NAME,
   process.env.DB_USER,
   process.env.DB_PASS,
   {
-    host: process.env.DB_HOST,
     dialect: 'postgres',
     logging: false,
-    dialectOptions: {
-      ssl: {
-        require: true,
-        rejectUnauthorized: false
-      }
-    }
+    ...(isSocket
+      ? {
+          // Cloud Run — Unix socket
+          dialectOptions: {
+            socketPath: dbHost,
+          },
+        }
+      : {
+          // Local — TCP/IP con SSL
+          host: dbHost,
+          dialectOptions: {
+            ssl: {
+              require: true,
+              rejectUnauthorized: false,
+            },
+          },
+        }),
   }
 );
 
