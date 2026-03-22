@@ -66,8 +66,10 @@ const anthropic = new Anthropic({
 // ==========================================
 // 🔑 JWT
 // ==========================================
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) throw new Error('JWT_SECRET no está configurado en .env');
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback_dev_secret_2026';
+if (!process.env.JWT_SECRET) {
+  console.warn('⚠️ JWT_SECRET no está configurado — usando valor de desarrollo');
+}
 
 // ==========================================
 // 🗄️ CONEXIÓN BD Y SINCRONIZACIÓN
