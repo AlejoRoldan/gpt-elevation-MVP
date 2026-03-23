@@ -3,25 +3,27 @@ const { sequelize } = require('./database');
 const CryptoJS = require('crypto-js');
 
 // ============================================
-// 🔐 TABLA DE PROMPTS ENCRIPTADOS
+// 🔐 TABLA DE PROMPTS ENCRIPTADOS CON VERSIONADO
 // ============================================
 const PromptVault = sequelize.define('PromptVault', {
   key: {
     type: DataTypes.STRING,
     allowNull: false,
     unique: true
-    // Nombre del prompt: 'elevation_system_prompt',
-    // 'crisis_protocol', 'session_close', etc.
   },
   contentEncrypted: {
     type: DataTypes.TEXT,
     allowNull: false
-    // Contenido encriptado con AES-256
-    // NUNCA se guarda en texto plano
   },
   version: {
     type: DataTypes.INTEGER,
     defaultValue: 1
+  },
+  // ---- NUEVO: flujo de aprobación ----
+  status: {
+    type: DataTypes.STRING(20),
+    defaultValue: 'active'
+    // active | pending_review | approved | rejected | archived
   },
   isActive: {
     type: DataTypes.BOOLEAN,
@@ -30,22 +32,42 @@ const PromptVault = sequelize.define('PromptVault', {
   updatedBy: {
     type: DataTypes.STRING,
     allowNull: true
-    // Email del admin que hizo el último cambio
+  },
+  proposed_by: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  approved_by: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  rejected_by: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  rejection_note: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  approved_at: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  rejected_at: {
+    type: DataTypes.DATE,
+    allowNull: true
   }
 });
 
 // ============================================
 // 🔒 FUNCIONES DE ENCRIPTACIÓN
 // ============================================
-
-// Encripta un texto plano usando la clave del .env
 const encryptPrompt = (plainText) => {
   const key = process.env.PROMPT_ENCRYPTION_KEY;
   if (!key) throw new Error('PROMPT_ENCRYPTION_KEY no está configurada');
   return CryptoJS.AES.encrypt(plainText, key).toString();
 };
 
-// Desencripta y retorna el texto plano en memoria
 const decryptPrompt = (encryptedText) => {
   const key = process.env.PROMPT_ENCRYPTION_KEY;
   if (!key) throw new Error('PROMPT_ENCRYPTION_KEY no está configurada');
@@ -58,19 +80,18 @@ const decryptPrompt = (encryptedText) => {
 // ============================================
 const getActivePrompt = async (promptKey) => {
   const record = await PromptVault.findOne({
-    where: { key: promptKey, isActive: true }
+    where: { key: promptKey, status: 'active' }
   });
   if (!record) return null;
   return decryptPrompt(record.contentEncrypted);
 };
 
 // ============================================
-// 💾 GUARDAR O ACTUALIZAR UN PROMPT
-// Solo lo puede hacer un admin desde el backoffice
+// 💾 GUARDAR PROMPT ACTIVO DIRECTO (solo para seed/migración)
 // ============================================
 const savePrompt = async (promptKey, plainText, adminEmail) => {
   const encrypted = encryptPrompt(plainText);
-  const existing = await PromptVault.findOne({ where: { key: promptKey } });
+  const existing = await PromptVault.findOne({ where: { key: promptKey, status: 'active' } });
 
   if (existing) {
     await existing.update({
@@ -82,9 +103,107 @@ const savePrompt = async (promptKey, plainText, adminEmail) => {
     await PromptVault.create({
       key: promptKey,
       contentEncrypted: encrypted,
-      updatedBy: adminEmail
+      updatedBy: adminEmail,
+      status: 'active',
+      isActive: true
     });
   }
 };
 
-module.exports = { PromptVault, getActivePrompt, savePrompt, encryptPrompt, decryptPrompt };
+// ============================================
+// 📤 PROPONER NUEVA VERSIÓN (rol: admin)
+// Crea una versión pending_review sin tocar el activo
+// ============================================
+const proposePrompt = async (promptKey, plainText, adminEmail) => {
+  const encrypted = encryptPrompt(plainText);
+
+  // Buscar la versión activa para saber el número siguiente
+  const active = await PromptVault.findOne({ where: { key: promptKey, status: 'active' } });
+  const nextVersion = active ? active.version + 1 : 1;
+
+  // Crear nueva versión en pending_review (NO toca el activo)
+  await PromptVault.create({
+    key: promptKey,
+    contentEncrypted: encrypted,
+    version: nextVersion,
+    status: 'pending_review',
+    isActive: false,
+    proposed_by: adminEmail
+  });
+};
+
+// ============================================
+// ✅ APROBAR UNA VERSIÓN (rol: superadmin)
+// ============================================
+const approvePrompt = async (versionId, superAdminEmail) => {
+  const proposed = await PromptVault.findByPk(versionId);
+  if (!proposed || proposed.status !== 'pending_review') {
+    throw new Error('Versión no encontrada o no está en pending_review');
+  }
+
+  // Archivar la versión activa anterior
+  await PromptVault.update(
+    { status: 'approved', isActive: false },
+    { where: { key: proposed.key, status: 'active' } }
+  );
+
+  // Activar la versión propuesta
+  await proposed.update({
+    status: 'active',
+    isActive: true,
+    approved_by: superAdminEmail,
+    approved_at: new Date()
+  });
+};
+
+// ============================================
+// ❌ RECHAZAR UNA VERSIÓN (rol: superadmin)
+// ============================================
+const rejectPrompt = async (versionId, superAdminEmail, note = '') => {
+  const proposed = await PromptVault.findByPk(versionId);
+  if (!proposed || proposed.status !== 'pending_review') {
+    throw new Error('Versión no encontrada o no está en pending_review');
+  }
+
+  await proposed.update({
+    status: 'rejected',
+    isActive: false,
+    rejected_by: superAdminEmail,
+    rejection_note: note,
+    rejected_at: new Date()
+  });
+};
+
+// ============================================
+// 🔁 ROLLBACK A VERSIÓN ANTERIOR (rol: superadmin)
+// ============================================
+const rollbackPrompt = async (versionId, superAdminEmail) => {
+  const target = await PromptVault.findByPk(versionId);
+  if (!target) throw new Error('Versión no encontrada');
+
+  // Archivar la activa actual
+  await PromptVault.update(
+    { status: 'approved', isActive: false },
+    { where: { key: target.key, status: 'active' } }
+  );
+
+  // Activar la versión objetivo
+  await target.update({
+    status: 'active',
+    isActive: true,
+    approved_by: superAdminEmail,
+    approved_at: new Date()
+  });
+};
+
+module.exports = {
+  PromptVault,
+  getActivePrompt,
+  savePrompt,
+  proposePrompt,
+  approvePrompt,
+  rejectPrompt,
+  rollbackPrompt,
+  encryptPrompt,
+  decryptPrompt
+};
