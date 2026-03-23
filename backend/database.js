@@ -16,8 +16,10 @@ const sequelize = new Sequelize(
     ...(isSocket
       ? {
           // Cloud Run — Unix socket
+          host: dbHost,
           dialectOptions: {
             socketPath: dbHost,
+         
           },
         }
       : {
