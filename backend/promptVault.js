@@ -9,7 +9,7 @@ const PromptVault = sequelize.define('PromptVault', {
   key: {
     type: DataTypes.STRING,
     allowNull: false,
-    unique: true
+    unique: false
   },
   contentEncrypted: {
     type: DataTypes.TEXT,
@@ -119,7 +119,9 @@ const proposePrompt = async (promptKey, plainText, adminEmail) => {
 
   // Buscar la versión activa para saber el número siguiente
   const active = await PromptVault.findOne({ where: { key: promptKey, status: 'active' } });
-  const nextVersion = active ? active.version + 1 : 1;
+  // Si no hay activo, buscar la versión más alta existente para ese key
+  const maxVersion = await PromptVault.max('version', { where: { key: promptKey } });
+  const nextVersion = maxVersion ? Number(maxVersion) + 1 : 2;
 
   // Crear nueva versión en pending_review (NO toca el activo)
   await PromptVault.create({

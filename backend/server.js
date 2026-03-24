@@ -8,7 +8,9 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { connectDB, sequelize } = require('./database');
 const User = require('./User');
 const Message = require('./Message');
-const { PromptVault, getActivePrompt } = require('./promptVault');
+const { 
+  PromptVault, getActivePrompt,savePrompt,proposePrompt, approvePrompt, rejectPrompt, rollbackPrompt 
+} = require('./promptVault');
 
 const app = express();
 
