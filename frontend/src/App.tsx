@@ -47,6 +47,14 @@ function App() {
   const [promptSaving,  setPromptSaving]  = useState(false);
   const [promptMsg,     setPromptMsg]     = useState('');
 
+// HU-033 — Versionado de prompts
+  const [promptMode,      setPromptMode]      = useState<'view' | 'edit'>('view');
+  const [activePrompt,    setActivePrompt]    = useState<any>(null);
+  const [pendingVersions, setPendingVersions] = useState<any[]>([]);
+  const [allVersions,     setAllVersions]     = useState<any[]>([]);
+  const [rejectNote,      setRejectNote]      = useState('');
+  const [rejectingId,     setRejectingId]     = useState<number | null>(null);
+
   // ── Boot ────────────────────────────────────────────────────
   useEffect(() => {
     const token = localStorage.getItem('elevation_token');
@@ -164,23 +172,41 @@ function App() {
   };
 
   // ── Admin ────────────────────────────────────────────────
-  const loadPrompts = async () => {
+  // HU-033 — Carga el prompt activo desde el backend
+  const loadActivePrompt = async () => {
     try {
-      const res = await fetch(`${BACKEND}/api/admin/prompts`, {
+      const res = await fetch(`${BACKEND}/api/admin/prompt/elevation_system_prompt`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('elevation_token')}` },
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.length > 0) setPromptVersion(`v${data[0].version}`);
+        setActivePrompt(data);
+        setPromptText(data.content || '');
+        setPromptVersion(`v${data.version}`);
       }
-    } catch {}
+    } catch { console.error('Error cargando prompt activo'); }
   };
 
-  const savePrompt = async () => {
+  // HU-033 — Carga versiones pendientes (solo superadmin)
+  const loadVersions = async () => {
+    try {
+      const res = await fetch(`${BACKEND}/api/superadmin/prompt/elevation_system_prompt/versions`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('elevation_token')}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAllVersions(data);
+        setPendingVersions(data.filter((v: any) => v.status === 'pending_review'));
+      }
+    } catch { console.error('Error cargando versiones'); }
+  };
+
+  // HU-033 — Proponer cambio (admin)
+  const proposePrompt = async () => {
     if (!promptText.trim()) return;
     setPromptSaving(true);
     try {
-      const res  = await fetch(`${BACKEND}/api/admin/prompt`, {
+      const res = await fetch(`${BACKEND}/api/admin/prompt/propose`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -189,12 +215,64 @@ function App() {
         body: JSON.stringify({ key: 'elevation_system_prompt', content: promptText }),
       });
       const data = await res.json();
-      setPromptMsg(data.message || 'Guardado correctamente.');
-      loadPrompts();
-    } catch { setPromptMsg('Error al guardar.'); }
+      setPromptMsg(data.message || 'Propuesta enviada.');
+      setPromptMode('view');
+      loadActivePrompt();
+    } catch { setPromptMsg('Error al enviar la propuesta.'); }
     setPromptSaving(false);
-    setTimeout(() => setPromptMsg(''), 3000);
+    setTimeout(() => setPromptMsg(''), 4000);
   };
+
+  // HU-033 — Aprobar versión (superadmin)
+  const approveVersion = async (id: number) => {
+    try {
+      await fetch(`${BACKEND}/api/superadmin/prompt/${id}/approve`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('elevation_token')}` },
+      });
+      setPromptMsg('✓ Versión aprobada y activa en producción.');
+      loadActivePrompt();
+      loadVersions();
+    } catch { setPromptMsg('Error al aprobar.'); }
+    setTimeout(() => setPromptMsg(''), 4000);
+  };
+
+  // HU-033 — Rechazar versión (superadmin)
+  const rejectVersion = async (id: number) => {
+    try {
+      await fetch(`${BACKEND}/api/superadmin/prompt/${id}/reject`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('elevation_token')}`,
+        },
+        body: JSON.stringify({ note: rejectNote }),
+      });
+      setPromptMsg('Versión rechazada.');
+      setRejectingId(null);
+      setRejectNote('');
+      loadVersions();
+    } catch { setPromptMsg('Error al rechazar.'); }
+    setTimeout(() => setPromptMsg(''), 4000);
+  };
+
+  // HU-033 — Rollback (superadmin)
+  const rollbackVersion = async (id: number) => {
+    if (!confirm('¿Seguro que quieres activar esta versión anterior?')) return;
+    try {
+      await fetch(`${BACKEND}/api/superadmin/prompt/${id}/rollback`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('elevation_token')}` },
+      });
+      setPromptMsg('✓ Rollback exitoso.');
+      loadActivePrompt();
+      loadVersions();
+    } catch { setPromptMsg('Error en rollback.'); }
+    setTimeout(() => setPromptMsg(''), 4000);
+  };
+
+  
+
 
   // ════════════════════════════════════════════════════════════
   // RENDER — LOGIN
@@ -365,8 +443,8 @@ function App() {
           {/* Acciones derecha */}
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
             {/* Ícono admin — solo visible para role=admin */}
-            {role === 'admin' && (
-              <button onClick={() => { loadPrompts(); setAdminOpen(true); }}
+            {['admin', 'superadmin'].includes(role) && (
+              <button onClick={() => { loadActivePrompt(); if (role === 'superadmin') loadVersions(); setAdminOpen(true); }}
                 title="Administración"
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#A8A29E', display: 'flex', padding: 4 }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -498,52 +576,174 @@ function App() {
               </button>
             </div>
 
-            {/* Contenido panel */}
-            <div style={{ flex: 1, padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+           {/* Contenido panel */}
+            <div style={{ flex: 1, padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem', overflowY: 'auto' }}>
+
+              {/* Header info prompt activo */}
               <div>
                 <h3 style={{ fontFamily: 'Playfair Display, serif', color: '#00685f', fontSize: '1.4rem', fontWeight: 400, marginBottom: '0.5rem' }}>
                   Cerebro de Elevation
                 </h3>
-                <span style={{
-                  display: 'inline-block', padding: '0.2rem 0.75rem', borderRadius: 9999,
-                  background: '#F0FDFA', color: '#065f46', fontSize: '11px', fontWeight: 500,
-                }}>
-                  {promptVersion} · Guardado por Alejo
-                </span>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ padding: '0.2rem 0.75rem', borderRadius: 9999, background: '#F0FDFA', color: '#065f46', fontSize: '11px', fontWeight: 500 }}>
+                    {activePrompt ? `v${activePrompt.version}` : promptVersion} · activo
+                  </span>
+                  {activePrompt?.approved_by && (
+                    <span style={{ fontSize: '11px', color: '#A8A29E' }}>
+                      Aprobado por {activePrompt.approved_by}
+                    </span>
+                  )}
+                  {/* Badge de pendientes — solo superadmin */}
+                  {role === 'superadmin' && pendingVersions.length > 0 && (
+                    <span style={{ padding: '0.2rem 0.75rem', borderRadius: 9999, background: '#FEF3C7', color: '#92400E', fontSize: '11px', fontWeight: 600 }}>
+                      ⏳ {pendingVersions.length} pendiente{pendingVersions.length > 1 ? 's' : ''} de revisión
+                    </span>
+                  )}
+                </div>
               </div>
 
-              <textarea
-                value={promptText}
-                onChange={e => setPromptText(e.target.value)}
-                placeholder="Escribe aquí el prompt del acompañante de Elevation..."
-                style={{
-                  width: '100%', height: 380, padding: '1.25rem',
-                  background: 'white', border: '1px solid #E7E5E4', borderRadius: '0.75rem',
-                  fontFamily: 'monospace', fontSize: '0.85rem', lineHeight: 1.7,
-                  color: '#1C1917', resize: 'none', outline: 'none', boxSizing: 'border-box',
-                }}
-              />
+              {promptMsg && (
+                <p style={{ fontSize: '0.8rem', color: '#0d9488', padding: '0.5rem 0.75rem', background: '#F0FDFA', borderRadius: '0.5rem' }}>
+                  {promptMsg}
+                </p>
+              )}
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.75rem', color: '#A8A29E' }}>{promptText.length} caracteres</span>
-                {promptMsg && <span style={{ fontSize: '0.75rem', color: '#0d9488' }}>{promptMsg}</span>}
-              </div>
+              {/* ── VISTA ADMIN: ver prompt activo + proponer cambio ── */}
+              {['admin', 'superadmin'].includes(role) && (
+                <>
+                  {promptMode === 'view' ? (
+                    <>
+                      <textarea
+                        value={promptText}
+                        readOnly
+                        style={{
+                          width: '100%', height: 260, padding: '1.25rem',
+                          background: '#FAFAFA', border: '1px solid #E7E5E4', borderRadius: '0.75rem',
+                          fontFamily: 'monospace', fontSize: '0.82rem', lineHeight: 1.7,
+                          color: '#78716C', resize: 'none', outline: 'none', boxSizing: 'border-box',
+                        }}
+                      />
+                      <button onClick={() => setPromptMode('edit')}
+                        style={{
+                          padding: '0.75rem', borderRadius: '0.75rem', border: '1px solid #0d9488',
+                          background: 'transparent', color: '#0d9488', fontSize: '0.875rem',
+                          fontWeight: 500, cursor: 'pointer',
+                        }}>
+                        ✏️ Proponer cambio
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <textarea
+                        value={promptText}
+                        onChange={e => setPromptText(e.target.value)}
+                        placeholder="Escribe el nuevo prompt..."
+                        style={{
+                          width: '100%', height: 260, padding: '1.25rem',
+                          background: 'white', border: '1px solid #0d9488', borderRadius: '0.75rem',
+                          fontFamily: 'monospace', fontSize: '0.82rem', lineHeight: 1.7,
+                          color: '#1C1917', resize: 'none', outline: 'none', boxSizing: 'border-box',
+                        }}
+                      />
+                      <div style={{ display: 'flex', gap: '0.75rem' }}>
+                        <button onClick={proposePrompt} disabled={promptSaving || !promptText.trim()}
+                          style={{
+                            flex: 1, padding: '0.75rem', borderRadius: '0.75rem', border: 'none',
+                            background: promptSaving || !promptText.trim() ? '#E7E5E4' : 'linear-gradient(135deg,#00685f,#008378)',
+                            color: promptSaving || !promptText.trim() ? '#A8A29E' : 'white',
+                            fontSize: '0.875rem', fontWeight: 500, cursor: 'pointer',
+                          }}>
+                          {promptSaving ? 'Enviando...' : '📤 Enviar para aprobación'}
+                        </button>
+                        <button onClick={() => { setPromptMode('view'); loadActivePrompt(); }}
+                          style={{ background: 'none', border: 'none', color: '#78716C', fontSize: '0.875rem', cursor: 'pointer', padding: '0.5rem 1rem' }}>
+                          Cancelar
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
 
-              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                <button onClick={savePrompt} disabled={promptSaving || !promptText.trim()}
-                  style={{
-                    flex: 1, padding: '0.875rem', borderRadius: '0.75rem', border: 'none', cursor: 'pointer',
-                    background: promptSaving || !promptText.trim() ? '#E7E5E4' : 'linear-gradient(135deg,#00685f,#008378)',
-                    color: promptSaving || !promptText.trim() ? '#A8A29E' : 'white',
-                    fontSize: '0.875rem', fontWeight: 500,
-                  }}>
-                  {promptSaving ? 'Guardando...' : 'Guardar cambios'}
-                </button>
-                <button onClick={() => setAdminOpen(false)}
-                  style={{ background: 'none', border: 'none', color: '#78716C', fontSize: '0.875rem', cursor: 'pointer', padding: '0.5rem 1rem' }}>
-                  Cancelar
-                </button>
-              </div>
+              {/* ── VISTA SUPERADMIN: versiones pendientes + historial ── */}
+              {role === 'superadmin' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <h4 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1C1917', margin: 0 }}>
+                    Versiones pendientes de aprobación
+                  </h4>
+
+                  {pendingVersions.length === 0 ? (
+                    <p style={{ fontSize: '0.8rem', color: '#A8A29E' }}>No hay versiones pendientes.</p>
+                  ) : (
+                    pendingVersions.map((v: any) => (
+                      <div key={v.id} style={{ background: 'white', border: '1px solid #E7E5E4', borderRadius: '0.75rem', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#1C1917' }}>v{v.version}</span>
+                          <span style={{ fontSize: '11px', color: '#A8A29E' }}>Propuesto por {v.proposed_by}</span>
+                        </div>
+
+                        {rejectingId === v.id ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            <input
+                              value={rejectNote}
+                              onChange={e => setRejectNote(e.target.value)}
+                              placeholder="Nota de rechazo (opcional)"
+                              style={{ padding: '0.5rem 0.75rem', border: '1px solid #E7E5E4', borderRadius: '0.5rem', fontSize: '0.8rem', outline: 'none' }}
+                            />
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                              <button onClick={() => rejectVersion(v.id)}
+                                style={{ flex: 1, padding: '0.5rem', borderRadius: '0.5rem', border: 'none', background: '#DC2626', color: 'white', fontSize: '0.8rem', cursor: 'pointer' }}>
+                                Confirmar rechazo
+                              </button>
+                              <button onClick={() => { setRejectingId(null); setRejectNote(''); }}
+                                style={{ padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #E7E5E4', background: 'none', fontSize: '0.8rem', cursor: 'pointer' }}>
+                                Cancelar
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button onClick={() => approveVersion(v.id)}
+                              style={{ flex: 1, padding: '0.5rem', borderRadius: '0.5rem', border: 'none', background: '#059669', color: 'white', fontSize: '0.8rem', cursor: 'pointer' }}>
+                              ✓ Aprobar
+                            </button>
+                            <button onClick={() => setRejectingId(v.id)}
+                              style={{ flex: 1, padding: '0.5rem', borderRadius: '0.5rem', border: '1px solid #DC2626', background: 'none', color: '#DC2626', fontSize: '0.8rem', cursor: 'pointer' }}>
+                              ✗ Rechazar
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+
+                  {/* Historial completo */}
+                  {allVersions.length > 0 && (
+                    <>
+                      <h4 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1C1917', margin: '0.5rem 0 0' }}>
+                        Historial de versiones
+                      </h4>
+                      {allVersions.filter((v: any) => v.status !== 'pending_review').map((v: any) => (
+                        <div key={v.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: 'white', border: '1px solid #E7E5E4', borderRadius: '0.75rem' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#1C1917' }}>v{v.version}</span>
+                            <span style={{ fontSize: '11px', color: v.status === 'active' ? '#059669' : '#A8A29E' }}>
+                              {v.status === 'active' ? '● activo' : v.status === 'approved' ? 'aprobado' : v.status === 'rejected' ? 'rechazado' : 'archivado'}
+                            </span>
+                          </div>
+                          {v.status !== 'active' && (
+                            <button onClick={() => rollbackVersion(v.id)}
+                              style={{ padding: '0.35rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #E7E5E4', background: 'none', fontSize: '11px', color: '#78716C', cursor: 'pointer' }}>
+                              Rollback
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
+              )}
+
             </div>
           </aside>
         </div>
