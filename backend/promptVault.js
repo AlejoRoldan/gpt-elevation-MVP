@@ -79,9 +79,16 @@ const decryptPrompt = (encryptedText) => {
 // 📖 OBTENER PROMPT ACTIVO POR CLAVE
 // ============================================
 const getActivePrompt = async (promptKey) => {
-  const record = await PromptVault.findOne({
+  let record = await PromptVault.findOne({
     where: { key: promptKey, status: 'active' }
   });
+  // Fallback: buscar por isActive=true si no hay status='active'
+  if (!record) {
+    record = await PromptVault.findOne({
+      where: { key: promptKey, isActive: true },
+      order: [['version', 'DESC']]
+    });
+  }
   if (!record) return null;
   return decryptPrompt(record.contentEncrypted);
 };

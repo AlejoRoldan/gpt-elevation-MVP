@@ -26,10 +26,12 @@ function App() {
   const [isRegistering, setIsRegistering] = useState(false);
   const [name,          setName]          = useState('');
   const [email,         setEmail]         = useState('');
+  const [isLocked, setIsLocked] = useState(false);
   const [password,      setPassword]      = useState('');
   const [authMessage,   setAuthMessage]   = useState('');
   const [showPassword,  setShowPassword]  = useState(false);
   const [role,          setRole]          = useState('user');
+  
 
   // Check-in
   const [mood, setMood] = useState<Mood>(null);
@@ -103,8 +105,11 @@ function App() {
       });
       const data = await res.json();
 
-      if (!res.ok) { setAuthMessage(`❌ ${data.error}`); return; }
-
+      if (!res.ok) {
+        setIsLocked(data.locked === true);
+        setAuthMessage(`❌ ${data.error}`);
+        return;
+        }
       if (isRegistering) {
         setAuthMessage('✓ Registro exitoso. Ahora inicia sesión.');
         setIsRegistering(false); setPassword(''); setName('');
@@ -331,10 +336,16 @@ function App() {
           )}
 
           <button type="submit"
+            disabled={isLocked}
             className="w-full py-3 text-white font-medium rounded-2xl hover:opacity-90 transition-opacity"
-            style={{ background: 'linear-gradient(135deg,#00685f,#008378)', fontSize: '0.9rem' }}>
-            {isRegistering ? 'Crear mi diario' : 'Entrar a mi espacio'}
-          </button>
+            style={{
+              background: isLocked ? '#E7E5E4' : 'linear-gradient(135deg,#00685f,#008378)',
+              color: isLocked ? '#A8A29E' : 'white',
+              fontSize: '0.9rem',
+              cursor: isLocked ? 'not-allowed' : 'pointer'
+            }}>
+            {isLocked ? '🔒 Cuenta bloqueada' : isRegistering ? 'Crear mi diario' : 'Entrar a mi espacio'}
+            </button>
 
           <button type="button"
             onClick={() => { setIsRegistering(!isRegistering); setAuthMessage(''); setPassword(''); setShowPassword(false); }}

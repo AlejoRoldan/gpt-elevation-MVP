@@ -19,7 +19,17 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING,
     allowNull: false,
     defaultValue: 'user'
+  },
+
+    loginAttempts: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0
+  },
+  lockedUntil: {
+    type: DataTypes.DATE,
+    allowNull: true
   }
+
 });
 
 module.exports = User;
