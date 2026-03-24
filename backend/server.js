@@ -145,12 +145,22 @@ const verificarToken = (req, res, next) => {
 
 const verificarAdmin = (req, res, next) => {
   verificarToken(req, res, () => {
-    if (req.user.role !== 'admin') {
+    if (!['admin', 'superadmin'].includes(req.user.role)) {
       return res.status(403).json({ error: "Acceso denegado. Solo administradores." });
     }
     next();
   });
 };
+
+const verificarSuperAdmin = (req, res, next) => {
+  verificarToken(req, res, () => {
+    if (req.user.role !== 'superadmin') {
+      return res.status(403).json({ error: "Acceso exclusivo para superadmin." });
+    }
+    next();
+  });
+};
+
 
 // ==========================================
 // 🧠 RUTA DEL CHAT
@@ -231,7 +241,7 @@ app.post('/api/admin/prompt', verificarAdmin, async (req, res) => {
     if (!key || !content) {
       return res.status(400).json({ error: "key y content son requeridos." });
     }
-    const { savePrompt } = require('./promptVault');
+    const { PromptVault, getActivePrompt, proposePrompt, approvePrompt, rejectPrompt, rollbackPrompt } = require('./promptVault');
     await savePrompt(key, content, req.user.name);
     res.json({ message: `Prompt '${key}' guardado y encriptado exitosamente.` });
   } catch (error) {
@@ -248,6 +258,86 @@ app.get('/api/admin/prompts', verificarAdmin, async (req, res) => {
     res.json(prompts);
   } catch (error) {
     res.status(500).json({ error: "No se pudieron obtener los prompts." });
+  }
+});
+
+// ==========================================
+// 🔐 RUTAS HU-033 — Versionado y aprobación de prompts
+// ==========================================
+
+// GET prompt activo desencriptado (admin y superadmin)
+app.get('/api/admin/prompt/:key', verificarAdmin, async (req, res) => {
+  try {
+    const prompt = await PromptVault.findOne({
+      where: { key: req.params.key, status: 'active' },
+      attributes: ['id', 'key', 'version', 'status', 'approved_by', 'approved_at', 'updatedAt']
+    });
+    if (!prompt) return res.status(404).json({ error: 'Prompt no encontrado.' });
+    const contenido = await getActivePrompt(req.params.key);
+    res.json({ ...prompt.toJSON(), content: contenido });
+  } catch (error) {
+    res.status(500).json({ error: 'Error obteniendo el prompt.' });
+  }
+});
+
+// POST proponer nueva versión (admin y superadmin)
+app.post('/api/admin/prompt/propose', verificarAdmin, async (req, res) => {
+  try {
+    const { key, content } = req.body;
+    if (!key || !content) return res.status(400).json({ error: 'key y content son requeridos.' });
+    await proposePrompt(key, content, req.user.name);
+    res.json({ message: 'Propuesta enviada al superadmin para revisión.' });
+  } catch (error) {
+    console.error('❌ Error proponiendo prompt:', error);
+    res.status(500).json({ error: 'No se pudo enviar la propuesta.' });
+  }
+});
+
+// GET historial de versiones (solo superadmin)
+app.get('/api/superadmin/prompt/:key/versions', verificarSuperAdmin, async (req, res) => {
+  try {
+    const versiones = await PromptVault.findAll({
+      where: { key: req.params.key },
+      attributes: ['id', 'key', 'version', 'status', 'proposed_by', 'approved_by', 'rejected_by', 'rejection_note', 'approved_at', 'rejected_at', 'updatedAt'],
+      order: [['version', 'DESC']]
+    });
+    res.json(versiones);
+  } catch (error) {
+    res.status(500).json({ error: 'Error obteniendo versiones.' });
+  }
+});
+
+// POST aprobar versión (solo superadmin)
+app.post('/api/superadmin/prompt/:id/approve', verificarSuperAdmin, async (req, res) => {
+  try {
+    await approvePrompt(req.params.id, req.user.name);
+    res.json({ message: 'Versión aprobada y activa en producción.' });
+  } catch (error) {
+    console.error('❌ Error aprobando prompt:', error);
+    res.status(500).json({ error: error.message || 'No se pudo aprobar la versión.' });
+  }
+});
+
+// POST rechazar versión (solo superadmin)
+app.post('/api/superadmin/prompt/:id/reject', verificarSuperAdmin, async (req, res) => {
+  try {
+    const { note } = req.body;
+    await rejectPrompt(req.params.id, req.user.name, note || '');
+    res.json({ message: 'Versión rechazada.' });
+  } catch (error) {
+    console.error('❌ Error rechazando prompt:', error);
+    res.status(500).json({ error: error.message || 'No se pudo rechazar la versión.' });
+  }
+});
+
+// POST rollback a versión anterior (solo superadmin)
+app.post('/api/superadmin/prompt/:id/rollback', verificarSuperAdmin, async (req, res) => {
+  try {
+    await rollbackPrompt(req.params.id, req.user.name);
+    res.json({ message: 'Rollback exitoso. Versión anterior activa en producción.' });
+  } catch (error) {
+    console.error('❌ Error en rollback:', error);
+    res.status(500).json({ error: error.message || 'No se pudo hacer rollback.' });
   }
 });
 
