@@ -4,8 +4,8 @@ import { useLanguage } from '../i18n/useLanguage'
 
 const BACKEND = import.meta.env.VITE_BACKEND_URL || ''
 
-type Message    = { role: string; text: string }
-type PromptData = { version: number; content: string; approved_by?: string }
+type Message     = { role: string; text: string }
+type PromptData  = { version: number; content: string; approved_by?: string }
 type VersionData = { id: number; version: number; status: string; proposed_by: string }
 type LandingContent = Record<string, string>
 
@@ -28,17 +28,27 @@ const LANDING_KEYS = [
   { key: 'cta_final_subtitle', label: 'Subtítulo CTA final' },
 ]
 
+const CHECKOUT_MOODS = [
+  { emoji: '😞', value: 0 },
+  { emoji: '😔', value: 1 },
+  { emoji: '😐', value: 2 },
+  { emoji: '🙂', value: 3 },
+  { emoji: '😊', value: 4 },
+]
+
 export function ChatPage() {
   const { t, lang, setLang } = useLanguage()
   const navigate = useNavigate()
   const role = localStorage.getItem('elevation_role') ?? 'user'
   const getToken = () => localStorage.getItem('elevation_token') ?? ''
 
+  // Chat
   const [messages,        setMessages]        = useState<Message[]>([])
   const [input,           setInput]           = useState('')
   const [sending,         setSending]         = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
+  // Admin panel
   const [adminOpen,       setAdminOpen]       = useState(false)
   const [adminTab,        setAdminTab]        = useState<'prompts' | 'landing'>('prompts')
   const [promptText,      setPromptText]      = useState('')
@@ -52,11 +62,16 @@ export function ChatPage() {
   const [rejectingId,     setRejectingId]     = useState<number | null>(null)
 
   // HU-039 — Contenido landing
-  const [landingTab,      setLandingTab]      = useState<'es' | 'en'>('es')
-  const [landingContent,  setLandingContent]  = useState<{ es: LandingContent; en: LandingContent }>({ es: {}, en: {} })
-  const [landingEdits,    setLandingEdits]    = useState<{ es: LandingContent; en: LandingContent }>({ es: {}, en: {} })
-  const [landingSaving,   setLandingSaving]   = useState<string | null>(null)
-  const [landingMsg,      setLandingMsg]      = useState<{ key: string; msg: string; ok: boolean } | null>(null)
+  const [landingTab,     setLandingTab]     = useState<'es' | 'en'>('es')
+  const [landingContent, setLandingContent] = useState<{ es: LandingContent; en: LandingContent }>({ es: {}, en: {} })
+  const [landingEdits,   setLandingEdits]   = useState<{ es: LandingContent; en: LandingContent }>({ es: {}, en: {} })
+  const [landingSaving,  setLandingSaving]  = useState<string | null>(null)
+  const [landingMsg,     setLandingMsg]     = useState<{ key: string; msg: string; ok: boolean } | null>(null)
+
+  // HU-021 — Check-out de ánimo
+  const [showCheckout,   setShowCheckout]   = useState(false)
+  const [checkoutMood,   setCheckoutMood]   = useState<number | null>(null)
+  const [checkoutSaving, setCheckoutSaving] = useState(false)
 
   const loadActivePrompt = useCallback(async () => {
     try {
@@ -80,7 +95,6 @@ export function ChatPage() {
     } catch { /* silencioso */ }
   }, [])
 
-  // HU-039 — cargar contenido landing en ambos idiomas
   const loadLandingContent = useCallback(async () => {
     try {
       const [resEs, resEn] = await Promise.all([
@@ -117,6 +131,21 @@ export function ChatPage() {
     localStorage.removeItem('elevation_name')
     localStorage.removeItem('elevation_checkin_date')
     navigate('/login')
+  }
+
+  // HU-021 — Guardar check-out y cerrar sesión
+  const handleCheckout = async (mood: number) => {
+    setCheckoutSaving(true)
+    try {
+      await apiFetch('/api/mood/checkout', getToken(), {
+        method: 'POST',
+        body: JSON.stringify({ mood }),
+      })
+    } catch { /* silencioso */ }
+    setCheckoutSaving(false)
+    setShowCheckout(false)
+    setCheckoutMood(null)
+    handleLogout()
   }
 
   const handleSend = async () => {
@@ -199,7 +228,6 @@ export function ChatPage() {
     setTimeout(() => setPromptMsg(''), 4000)
   }
 
-  // HU-039 — guardar un campo de landing
   const saveLandingField = async (key: string, langCode: 'es' | 'en') => {
     const value = landingEdits[langCode][key]
     if (!value?.trim()) return
@@ -224,6 +252,8 @@ export function ChatPage() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#f9f9f7', fontFamily: 'Inter, sans-serif' }}>
+
+      {/* Header */}
       <header style={{ position: 'fixed', top: 0, width: '100%', zIndex: 50, background: 'rgba(249,249,247,0.85)', backdropFilter: 'blur(16px)', borderBottom: '1px solid rgba(231,229,228,0.5)', height: 60, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ maxWidth: 680, width: '100%', padding: '0 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ width: 24 }} />
@@ -242,7 +272,8 @@ export function ChatPage() {
                 </svg>
               </button>
             )}
-            <button onClick={handleLogout} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#A8A29E', display: 'flex', padding: 4 }}>
+            {/* HU-021 — Botón logout abre modal check-out */}
+            <button onClick={() => setShowCheckout(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#A8A29E', display: 'flex', padding: 4 }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
               </svg>
@@ -251,6 +282,7 @@ export function ChatPage() {
         </div>
       </header>
 
+      {/* Mensajes */}
       <main style={{ maxWidth: 680, width: '100%', margin: '0 auto', paddingTop: 80, paddingBottom: 120, paddingLeft: '1.5rem', paddingRight: '1.5rem' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
           {messages.map((msg, i) => (
@@ -279,6 +311,7 @@ export function ChatPage() {
         </div>
       </main>
 
+      {/* Input */}
       <div style={{ position: 'fixed', bottom: 0, left: 0, width: '100%', zIndex: 40, background: 'rgba(249,249,247,0.95)', backdropFilter: 'blur(16px)', borderTop: '1px solid rgba(231,229,228,0.5)' }}>
         <div style={{ maxWidth: 680, margin: '0 auto', padding: '1rem 1.5rem', display: 'flex', alignItems: 'flex-end', gap: '0.75rem' }}>
           <textarea value={input} onChange={e => setInput(e.target.value)}
@@ -295,12 +328,59 @@ export function ChatPage() {
         </div>
       </div>
 
+      {/* HU-021 — Modal check-out */}
+      {showCheckout && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(26,28,27,0.15)', backdropFilter: 'blur(4px)' }}>
+          <div style={{ background: '#FAF8F4', borderRadius: '1.25rem', padding: '2.5rem 2rem', maxWidth: 380, width: '90%', display: 'flex', flexDirection: 'column', gap: '1.5rem', alignItems: 'center', border: '0.5px solid #E7E5E4' }}>
+            <p style={{ fontSize: 10, letterSpacing: '0.15em', color: '#A8A29E', margin: 0, textTransform: 'uppercase' }}>CHECK-OUT</p>
+            <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: '1.4rem', fontWeight: 400, color: '#1C1917', margin: 0, textAlign: 'center' }}>
+              {lang === 'es' ? '¿Cómo te vas?' : 'How are you leaving?'}
+            </h3>
+            <p style={{ fontSize: '0.85rem', color: '#78716C', margin: 0, textAlign: 'center' }}>
+              {lang === 'es' ? 'Tomá un momento antes de cerrar.' : 'Take a moment before closing.'}
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              {CHECKOUT_MOODS.map(m => (
+                <button key={m.value} onClick={() => setCheckoutMood(m.value)}
+                  style={{
+                    width: 52, height: 52, borderRadius: '50%', fontSize: '1.5rem',
+                    border: checkoutMood === m.value ? '2px solid #0d9488' : '1px solid #E7E5E4',
+                    background: checkoutMood === m.value ? '#F0FDFA' : 'white',
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'all 0.2s',
+                  }}>
+                  {m.emoji}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem', width: '100%' }}>
+              <button
+                onClick={() => { if (checkoutMood !== null) void handleCheckout(checkoutMood) }}
+                disabled={checkoutMood === null || checkoutSaving}
+                style={{
+                  flex: 1, padding: '0.85rem', borderRadius: '0.85rem', border: 'none',
+                  background: checkoutMood !== null ? 'linear-gradient(135deg,#00685f,#008378)' : '#E7E5E4',
+                  color: checkoutMood !== null ? 'white' : '#A8A29E',
+                  fontSize: '0.875rem', fontWeight: 500,
+                  cursor: checkoutMood !== null ? 'pointer' : 'not-allowed',
+                  fontFamily: 'Inter, sans-serif',
+                }}>
+                {checkoutSaving ? '...' : lang === 'es' ? 'Cerrar sesión' : 'Sign out'}
+              </button>
+              <button onClick={handleLogout}
+                style={{ padding: '0.85rem 1rem', borderRadius: '0.85rem', border: '0.5px solid #D6D2C4', background: 'transparent', color: '#78716C', fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+                {lang === 'es' ? 'Saltar' : 'Skip'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Panel Admin */}
       {adminOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', justifyContent: 'flex-end' }}>
           <div onClick={() => setAdminOpen(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(26,28,27,0.1)', backdropFilter: 'blur(4px)' }} />
           <aside style={{ position: 'relative', width: '100%', maxWidth: 480, height: '100%', background: '#F5F3EF', borderLeft: '1px solid #E7E5E4', display: 'flex', flexDirection: 'column', overflowY: 'auto', boxShadow: '0 0 60px rgba(0,0,0,0.08)' }}>
-
-            {/* Header panel */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.5rem 2rem', borderBottom: '1px solid #E7E5E4' }}>
               <h2 style={{ fontSize: '1rem', fontWeight: 600, color: '#1C1917', margin: 0 }}>{t('admin_title')}</h2>
               <button onClick={() => setAdminOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#78716C', padding: 4 }}>
@@ -309,8 +389,6 @@ export function ChatPage() {
                 </svg>
               </button>
             </div>
-
-            {/* Tabs principales — solo superadmin ve landing */}
             {role === 'superadmin' && (
               <div style={{ display: 'flex', borderBottom: '1px solid #E7E5E4', background: '#FAF8F4' }}>
                 {([['prompts', 'Prompts'], ['landing', 'Contenido Landing']] as const).map(([tab, label]) => (
@@ -321,10 +399,7 @@ export function ChatPage() {
                 ))}
               </div>
             )}
-
             <div style={{ flex: 1, padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem', overflowY: 'auto' }}>
-
-              {/* ── TAB PROMPTS ── */}
               {(adminTab === 'prompts' || role !== 'superadmin') && (
                 <>
                   <div>
@@ -409,12 +484,8 @@ export function ChatPage() {
                   )}
                 </>
               )}
-
-              {/* ── TAB CONTENIDO LANDING — solo superadmin ── */}
               {adminTab === 'landing' && role === 'superadmin' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-
-                  {/* Tabs ES / EN */}
                   <div style={{ display: 'flex', gap: 6 }}>
                     {(['es', 'en'] as const).map(l => (
                       <button key={l} onClick={() => setLandingTab(l)}
@@ -423,43 +494,31 @@ export function ChatPage() {
                       </button>
                     ))}
                   </div>
-
-                  {/* Campos editables */}
                   {LANDING_KEYS.map(({ key, label }) => {
                     const fieldId = `${landingTab}-${key}`
                     const isSaving = landingSaving === fieldId
                     const feedback = landingMsg?.key === fieldId ? landingMsg : null
                     const hasChanged = landingEdits[landingTab][key] !== landingContent[landingTab][key]
-
                     return (
                       <div key={fieldId} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                         <label style={{ fontSize: 11, color: '#7A7A7A', letterSpacing: '0.05em' }}>{label}</label>
                         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
                           <textarea
                             value={landingEdits[landingTab][key] ?? ''}
-                            onChange={e => setLandingEdits(prev => ({
-                              ...prev,
-                              [landingTab]: { ...prev[landingTab], [key]: e.target.value }
-                            }))}
+                            onChange={e => setLandingEdits(prev => ({ ...prev, [landingTab]: { ...prev[landingTab], [key]: e.target.value } }))}
                             rows={2}
-                            style={{ flex: 1, padding: '0.6rem 0.75rem', borderRadius: '0.5rem', border: `0.5px solid ${hasChanged ? '#6B7D5C' : '#D6D2C4'}`, background: '#FAF8F4', fontSize: 13, color: '#1C1917', resize: 'vertical', outline: 'none', fontFamily: 'Inter, sans-serif', lineHeight: 1.5 }}
-                          />
-                          <button
-                            onClick={() => { void saveLandingField(key, landingTab) }}
-                            disabled={isSaving || !hasChanged}
+                            style={{ flex: 1, padding: '0.6rem 0.75rem', borderRadius: '0.5rem', border: `0.5px solid ${hasChanged ? '#6B7D5C' : '#D6D2C4'}`, background: '#FAF8F4', fontSize: 13, color: '#1C1917', resize: 'vertical', outline: 'none', fontFamily: 'Inter, sans-serif', lineHeight: 1.5 }} />
+                          <button onClick={() => { void saveLandingField(key, landingTab) }} disabled={isSaving || !hasChanged}
                             style={{ padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: 'none', background: isSaving || !hasChanged ? '#E7E5E4' : '#6B7D5C', color: isSaving || !hasChanged ? '#A8A29E' : '#FAF8F4', fontSize: 11, cursor: isSaving || !hasChanged ? 'not-allowed' : 'pointer', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap', marginTop: 1 }}>
                             {isSaving ? '...' : 'Guardar'}
                           </button>
                         </div>
-                        {feedback && (
-                          <span style={{ fontSize: 11, color: feedback.ok ? '#059669' : '#DC2626' }}>{feedback.msg}</span>
-                        )}
+                        {feedback && <span style={{ fontSize: 11, color: feedback.ok ? '#059669' : '#DC2626' }}>{feedback.msg}</span>}
                       </div>
                     )
                   })}
                 </div>
               )}
-
             </div>
           </aside>
         </div>

@@ -13,6 +13,7 @@ const {
   PromptVault, getActivePrompt, savePrompt, proposePrompt, approvePrompt, rejectPrompt, rollbackPrompt 
 } = require('./promptVault');
 const LandingContent = require('./LandingContent');
+const MoodLog = require('./MoodLog');
 
 const app = express();
 
@@ -73,6 +74,8 @@ if (!process.env.JWT_SECRET) {
 connectDB().then(() => {
   User.hasMany(Message);
   Message.belongsTo(User);
+  User.hasMany(MoodLog);
+  MoodLog.belongsTo(User);
   sequelize.sync({ alter: true })
     .then(() => console.log('✅ Tablas sincronizadas en PostgreSQL.'))
     .catch(err => console.error('❌ Error sincronizando tablas:', err));
@@ -403,6 +406,67 @@ app.put('/api/landing-content', verificarSuperAdmin, async (req, res) => {
   } catch (error) {
     console.error('❌ Error actualizando contenido landing:', error);
     res.status(500).json({ error: 'No se pudo actualizar el contenido.' });
+  }
+});
+
+// ==========================================
+// 😊 HU-021 — MOOD LOGS (Check-in / Check-out)
+// ==========================================
+
+// POST /api/mood/checkin — guarda el estado de ánimo al iniciar
+app.post('/api/mood/checkin', verificarToken, async (req, res) => {
+  try {
+    const { mood } = req.body;
+    const today = new Date().toISOString().split('T')[0];
+    const userId = req.user.id;
+
+    // upsert — si ya existe el registro del día, actualiza solo el checkin
+    const [log] = await MoodLog.upsert({
+      UserId: userId,
+      date: today,
+      checkin_mood: mood,
+    });
+
+    res.json({ message: 'Check-in registrado.', log });
+  } catch (error) {
+    console.error('❌ Error en mood checkin:', error);
+    res.status(500).json({ error: 'No se pudo registrar el check-in.' });
+  }
+});
+
+// POST /api/mood/checkout — actualiza el estado de ánimo al finalizar
+app.post('/api/mood/checkout', verificarToken, async (req, res) => {
+  try {
+    const { mood } = req.body;
+    const today = new Date().toISOString().split('T')[0];
+    const userId = req.user.id;
+
+    // busca el registro del día y actualiza solo el checkout
+    const [log, created] = await MoodLog.upsert({
+      UserId: userId,
+      date: today,
+      checkout_mood: mood,
+    });
+
+    res.json({ message: 'Check-out registrado.', log });
+  } catch (error) {
+    console.error('❌ Error en mood checkout:', error);
+    res.status(500).json({ error: 'No se pudo registrar el check-out.' });
+  }
+});
+
+// GET /api/mood/history — historial de los últimos 30 días
+app.get('/api/mood/history', verificarToken, async (req, res) => {
+  try {
+    const logs = await MoodLog.findAll({
+      where: { UserId: req.user.id },
+      order: [['date', 'DESC']],
+      limit: 30,
+    });
+    res.json(logs);
+  } catch (error) {
+    console.error('❌ Error obteniendo historial mood:', error);
+    res.status(500).json({ error: 'No se pudo obtener el historial.' });
   }
 });
 
