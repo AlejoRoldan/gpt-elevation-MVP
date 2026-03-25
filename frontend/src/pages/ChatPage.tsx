@@ -73,6 +73,10 @@ export function ChatPage() {
   const [checkoutMood,   setCheckoutMood]   = useState<number | null>(null)
   const [checkoutSaving, setCheckoutSaving] = useState(false)
 
+  // HU-022 — Calificación con estrellas
+  const [starRating,     setStarRating]     = useState<number | null>(null)
+  const [starHover,      setStarHover]      = useState<number | null>(null)
+
   const loadActivePrompt = useCallback(async () => {
     try {
       const res = await apiFetch('/api/admin/prompt/elevation_system_prompt', getToken())
@@ -133,7 +137,7 @@ export function ChatPage() {
     navigate('/login')
   }
 
-  // HU-021 — Guardar check-out y cerrar sesión
+  // HU-021 + HU-022 — Guardar checkout + rating y cerrar sesión
   const handleCheckout = async (mood: number) => {
     setCheckoutSaving(true)
     try {
@@ -142,9 +146,21 @@ export function ChatPage() {
         body: JSON.stringify({ mood }),
       })
     } catch { /* silencioso */ }
+
+    // HU-022 — guardar calificación si seleccionó estrellas
+    if (starRating !== null) {
+      try {
+        await apiFetch('/api/rating', getToken(), {
+          method: 'POST',
+          body: JSON.stringify({ rating: starRating }),
+        })
+      } catch { /* silencioso */ }
+    }
+
     setCheckoutSaving(false)
     setShowCheckout(false)
     setCheckoutMood(null)
+    setStarRating(null)
     handleLogout()
   }
 
@@ -272,7 +288,6 @@ export function ChatPage() {
                 </svg>
               </button>
             )}
-            {/* HU-021 — Botón logout abre modal check-out */}
             <button onClick={() => setShowCheckout(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#A8A29E', display: 'flex', padding: 4 }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
@@ -328,17 +343,21 @@ export function ChatPage() {
         </div>
       </div>
 
-      {/* HU-021 — Modal check-out */}
+      {/* HU-021 + HU-022 — Modal check-out + estrellas */}
       {showCheckout && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(26,28,27,0.15)', backdropFilter: 'blur(4px)' }}>
-          <div style={{ background: '#FAF8F4', borderRadius: '1.25rem', padding: '2.5rem 2rem', maxWidth: 380, width: '90%', display: 'flex', flexDirection: 'column', gap: '1.5rem', alignItems: 'center', border: '0.5px solid #E7E5E4' }}>
+          <div style={{ background: '#FAF8F4', borderRadius: '1.25rem', padding: '2.5rem 2rem', maxWidth: 400, width: '90%', display: 'flex', flexDirection: 'column', gap: '1.5rem', alignItems: 'center', border: '0.5px solid #E7E5E4' }}>
+
             <p style={{ fontSize: 10, letterSpacing: '0.15em', color: '#A8A29E', margin: 0, textTransform: 'uppercase' }}>CHECK-OUT</p>
+
             <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: '1.4rem', fontWeight: 400, color: '#1C1917', margin: 0, textAlign: 'center' }}>
               {lang === 'es' ? '¿Cómo te vas?' : 'How are you leaving?'}
             </h3>
             <p style={{ fontSize: '0.85rem', color: '#78716C', margin: 0, textAlign: 'center' }}>
               {lang === 'es' ? 'Tomá un momento antes de cerrar.' : 'Take a moment before closing.'}
             </p>
+
+            {/* Emojis — HU-021 */}
             <div style={{ display: 'flex', gap: '0.75rem' }}>
               {CHECKOUT_MOODS.map(m => (
                 <button key={m.value} onClick={() => setCheckoutMood(m.value)}
@@ -353,6 +372,35 @@ export function ChatPage() {
                 </button>
               ))}
             </div>
+
+            {/* Estrellas — HU-022 — aparecen después de seleccionar emoji */}
+            {checkoutMood !== null && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', width: '100%' }}>
+                <p style={{ fontSize: '0.8rem', color: '#78716C', margin: 0 }}>
+                  {lang === 'es' ? '¿Cómo fue la conversación?' : 'How was the conversation?'}
+                </p>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  {[1, 2, 3, 4, 5].map(star => (
+                    <button key={star}
+                      onClick={() => setStarRating(star)}
+                      onMouseEnter={() => setStarHover(star)}
+                      onMouseLeave={() => setStarHover(null)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', fontSize: 28, lineHeight: 1, transition: 'transform 0.1s', transform: starHover === star ? 'scale(1.2)' : 'scale(1)' }}>
+                      <span style={{ color: star <= (starHover ?? starRating ?? 0) ? '#6B7D5C' : '#D6D2C4' }}>
+                        ★
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                {starRating && (
+                  <p style={{ fontSize: '0.75rem', color: '#A8A29E', margin: 0 }}>
+                    {['', '😞 Muy mala', '😐 Regular', '🙂 Buena', '😊 Muy buena', '✨ Excelente'][starRating]}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Botones */}
             <div style={{ display: 'flex', gap: '0.75rem', width: '100%' }}>
               <button
                 onClick={() => { if (checkoutMood !== null) void handleCheckout(checkoutMood) }}
@@ -372,6 +420,7 @@ export function ChatPage() {
                 {lang === 'es' ? 'Saltar' : 'Skip'}
               </button>
             </div>
+
           </div>
         </div>
       )}
