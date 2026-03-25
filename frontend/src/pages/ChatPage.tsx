@@ -1,0 +1,340 @@
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useLanguage } from '../i18n/useLanguage'
+
+const BACKEND = import.meta.env.VITE_BACKEND_URL || ''
+
+type Message    = { role: string; text: string }
+type PromptData = { version: number; content: string; approved_by?: string }
+type VersionData = { id: number; version: number; status: string; proposed_by: string }
+
+async function apiFetch(path: string, token: string, options?: RequestInit) {
+  return fetch(`${BACKEND}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      ...(options?.headers ?? {}),
+    },
+  })
+}
+
+export function ChatPage() {
+  const { t, lang, setLang } = useLanguage()
+  const navigate = useNavigate()
+  const role = localStorage.getItem('elevation_role') ?? 'user'
+  const getToken = () => localStorage.getItem('elevation_token') ?? ''
+
+  const [messages,        setMessages]        = useState<Message[]>([])
+  const [input,           setInput]           = useState('')
+  const [sending,         setSending]         = useState(false)
+  const chatEndRef = useRef<HTMLDivElement>(null)
+
+  const [adminOpen,       setAdminOpen]       = useState(false)
+  const [promptText,      setPromptText]      = useState('')
+  const [promptSaving,    setPromptSaving]    = useState(false)
+  const [promptMsg,       setPromptMsg]       = useState('')
+  const [promptMode,      setPromptMode]      = useState<'view' | 'edit'>('view')
+  const [activePrompt,    setActivePrompt]    = useState<PromptData | null>(null)
+  const [pendingVersions, setPendingVersions] = useState<VersionData[]>([])
+  const [allVersions,     setAllVersions]     = useState<VersionData[]>([])
+  const [rejectNote,      setRejectNote]      = useState('')
+  const [rejectingId,     setRejectingId]     = useState<number | null>(null)
+
+  const loadActivePrompt = useCallback(async () => {
+    try {
+      const res = await apiFetch('/api/admin/prompt/elevation_system_prompt', getToken())
+      if (res.ok) {
+        const data = await res.json() as PromptData
+        setActivePrompt(data)
+        setPromptText(data.content ?? '')
+      }
+    } catch { /* silencioso */ }
+  }, [])
+
+  const loadVersions = useCallback(async () => {
+    try {
+      const res = await apiFetch('/api/superadmin/prompt/elevation_system_prompt/versions', getToken())
+      if (res.ok) {
+        const data = await res.json() as VersionData[]
+        setAllVersions(data)
+        setPendingVersions(data.filter(v => v.status === 'pending_review'))
+      }
+    } catch { /* silencioso */ }
+  }, [])
+
+  useEffect(() => {
+    const token = getToken()
+    if (!token) { navigate('/login'); return }
+    setMessages([{ role: 'bot', text: t('chat_welcome') }])
+    void apiFetch('/api/messages', token).then(async res => {
+      if (res.ok) {
+        const hist = await res.json() as Message[]
+        if (hist.length > 0) setMessages(prev => [prev[0], ...hist])
+      }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, sending])
+
+  const handleLogout = () => {
+    localStorage.removeItem('elevation_token')
+    localStorage.removeItem('elevation_role')
+    localStorage.removeItem('elevation_name')
+    localStorage.removeItem('elevation_checkin_date')
+    navigate('/login')
+  }
+
+  const handleSend = async () => {
+    if (!input.trim() || sending) return
+    const userText = input.trim()
+    setInput('')
+    setMessages(prev => [...prev, { role: 'user', text: userText }])
+    setSending(true)
+    try {
+      const res  = await apiFetch('/api/chat', getToken(), {
+        method: 'POST',
+        body: JSON.stringify({ message: userText }),
+      })
+      const data = await res.json() as { reply: string }
+      setMessages(prev => [...prev, { role: 'bot', text: data.reply }])
+    } catch {
+      setMessages(prev => [...prev, { role: 'bot', text: t('chat_error') }])
+    }
+    setSending(false)
+  }
+
+  const openAdmin = () => {
+    void loadActivePrompt()
+    if (role === 'superadmin') void loadVersions()
+    setAdminOpen(true)
+  }
+
+  const proposePrompt = async () => {
+    if (!promptText.trim()) return
+    setPromptSaving(true)
+    try {
+      const res  = await apiFetch('/api/admin/prompt/propose', getToken(), {
+        method: 'POST',
+        body: JSON.stringify({ key: 'elevation_system_prompt', content: promptText }),
+      })
+      const data = await res.json() as { message?: string }
+      setPromptMsg(data.message ?? t('admin_send'))
+      setPromptMode('view')
+      void loadActivePrompt()
+    } catch { setPromptMsg('Error al enviar.') }
+    setPromptSaving(false)
+    setTimeout(() => setPromptMsg(''), 4000)
+  }
+
+  const approveVersion = async (id: number) => {
+    try {
+      await apiFetch(`/api/superadmin/prompt/${id}/approve`, getToken(), { method: 'POST' })
+      setPromptMsg(`✓ ${t('admin_approve')}`)
+      void loadActivePrompt()
+      void loadVersions()
+    } catch { setPromptMsg('Error al aprobar.') }
+    setTimeout(() => setPromptMsg(''), 4000)
+  }
+
+  const rejectVersion = async (id: number) => {
+    try {
+      await apiFetch(`/api/superadmin/prompt/${id}/reject`, getToken(), {
+        method: 'POST',
+        body: JSON.stringify({ note: rejectNote }),
+      })
+      setPromptMsg('Versión rechazada.')
+      setRejectingId(null)
+      setRejectNote('')
+      void loadVersions()
+    } catch { setPromptMsg('Error al rechazar.') }
+    setTimeout(() => setPromptMsg(''), 4000)
+  }
+
+  const rollbackVersion = async (id: number) => {
+    if (!confirm('¿Seguro que querés activar esta versión anterior?')) return
+    try {
+      await apiFetch(`/api/superadmin/prompt/${id}/rollback`, getToken(), { method: 'POST' })
+      setPromptMsg('✓ Rollback exitoso.')
+      void loadActivePrompt()
+      void loadVersions()
+    } catch { setPromptMsg('Error en rollback.') }
+    setTimeout(() => setPromptMsg(''), 4000)
+  }
+
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#f9f9f7', fontFamily: 'Inter, sans-serif' }}>
+      <header style={{ position: 'fixed', top: 0, width: '100%', zIndex: 50, background: 'rgba(249,249,247,0.85)', backdropFilter: 'blur(16px)', borderBottom: '1px solid rgba(231,229,228,0.5)', height: 60, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ maxWidth: 680, width: '100%', padding: '0 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ width: 24 }} />
+          <span style={{ fontSize: 10, letterSpacing: '0.3em', color: '#A8A29E', textTransform: 'uppercase' }}>{t('logo')}</span>
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+            {(['es', 'en'] as const).map(l => (
+              <button key={l} onClick={() => setLang(l)}
+                style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, border: '0.5px solid #D6D2C4', background: lang === l ? '#6B7D5C' : 'transparent', color: lang === l ? '#FAF8F4' : '#A8A29E', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+                {l.toUpperCase()}
+              </button>
+            ))}
+            {['admin', 'superadmin'].includes(role) && (
+              <button onClick={openAdmin} title={t('admin_title')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#A8A29E', display: 'flex', padding: 4 }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+                </svg>
+              </button>
+            )}
+            <button onClick={handleLogout} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#A8A29E', display: 'flex', padding: 4 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main style={{ maxWidth: 680, width: '100%', margin: '0 auto', paddingTop: 80, paddingBottom: 120, paddingLeft: '1.5rem', paddingRight: '1.5rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+          {messages.map((msg, i) => (
+            <div key={i}>
+              {msg.role === 'user' ? (
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <div style={{ maxWidth: '80%', background: 'white', borderRadius: '1.25rem 1.25rem 0.25rem 1.25rem', padding: '1rem 1.25rem', boxShadow: '0 2px 12px rgba(26,28,27,0.06)', color: '#1C1917', fontSize: '1rem', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                    {msg.text}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ borderLeft: '2px solid #0d9488', paddingLeft: '1.25rem' }}>
+                  <span style={{ display: 'block', fontSize: 10, fontWeight: 600, letterSpacing: '0.2em', color: '#0d9488', textTransform: 'uppercase', marginBottom: '0.4rem' }}>{t('logo')} ·</span>
+                  <p style={{ fontFamily: 'Noto Serif, serif', fontStyle: 'italic', fontSize: '1.05rem', color: '#1C1917', lineHeight: 1.85, whiteSpace: 'pre-wrap', margin: 0 }}>{msg.text}</p>
+                </div>
+              )}
+            </div>
+          ))}
+          {sending && (
+            <div style={{ borderLeft: '2px solid #0d9488', paddingLeft: '1.25rem' }}>
+              <span style={{ display: 'block', fontSize: 10, fontWeight: 600, letterSpacing: '0.2em', color: '#0d9488', textTransform: 'uppercase', marginBottom: '0.5rem' }}>{t('logo')} ·</span>
+              <p style={{ fontFamily: 'Noto Serif, serif', fontStyle: 'italic', fontSize: '0.95rem', color: '#A8A29E', margin: 0 }}>{t('chat_thinking')}</p>
+            </div>
+          )}
+          <div ref={chatEndRef} />
+        </div>
+      </main>
+
+      <div style={{ position: 'fixed', bottom: 0, left: 0, width: '100%', zIndex: 40, background: 'rgba(249,249,247,0.95)', backdropFilter: 'blur(16px)', borderTop: '1px solid rgba(231,229,228,0.5)' }}>
+        <div style={{ maxWidth: 680, margin: '0 auto', padding: '1rem 1.5rem', display: 'flex', alignItems: 'flex-end', gap: '0.75rem' }}>
+          <textarea value={input} onChange={e => setInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleSend() } }}
+            placeholder={t('chat_placeholder')} rows={2}
+            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontFamily: 'Noto Serif, serif', fontStyle: 'italic', fontSize: '1rem', color: '#1C1917', lineHeight: 1.6, maxHeight: 120, overflowY: 'auto' }} />
+          {input.trim() && (
+            <button onClick={() => { void handleSend() }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#0d9488', padding: 4, display: 'flex', flexShrink: 0 }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {adminOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', justifyContent: 'flex-end' }}>
+          <div onClick={() => setAdminOpen(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(26,28,27,0.1)', backdropFilter: 'blur(4px)' }} />
+          <aside style={{ position: 'relative', width: '100%', maxWidth: 480, height: '100%', background: '#F5F3EF', borderLeft: '1px solid #E7E5E4', display: 'flex', flexDirection: 'column', overflowY: 'auto', boxShadow: '0 0 60px rgba(0,0,0,0.08)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.5rem 2rem', borderBottom: '1px solid #E7E5E4' }}>
+              <h2 style={{ fontSize: '1rem', fontWeight: 600, color: '#1C1917', margin: 0 }}>{t('admin_title')}</h2>
+              <button onClick={() => setAdminOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#78716C', padding: 4 }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+            <div style={{ flex: 1, padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem', overflowY: 'auto' }}>
+              <div>
+                <h3 style={{ fontFamily: 'Playfair Display, serif', color: '#00685f', fontSize: '1.4rem', fontWeight: 400, marginBottom: '0.5rem' }}>{t('admin_brain')}</h3>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ padding: '0.2rem 0.75rem', borderRadius: 9999, background: '#F0FDFA', color: '#065f46', fontSize: 11, fontWeight: 500 }}>
+                    {activePrompt ? `v${activePrompt.version}` : '—'} · {t('admin_active')}
+                  </span>
+                  {activePrompt?.approved_by && <span style={{ fontSize: 11, color: '#A8A29E' }}>{t('admin_approved_by')} {activePrompt.approved_by}</span>}
+                  {role === 'superadmin' && pendingVersions.length > 0 && (
+                    <span style={{ padding: '0.2rem 0.75rem', borderRadius: 9999, background: '#FEF3C7', color: '#92400E', fontSize: 11, fontWeight: 600 }}>
+                      ⏳ {pendingVersions.length} {pendingVersions.length > 1 ? t('admin_pending_plural') : t('admin_pending')}
+                    </span>
+                  )}
+                </div>
+              </div>
+              {promptMsg && <p style={{ fontSize: '0.8rem', color: '#0d9488', padding: '0.5rem 0.75rem', background: '#F0FDFA', borderRadius: '0.5rem', margin: 0 }}>{promptMsg}</p>}
+              {['admin', 'superadmin'].includes(role) && (
+                <>
+                  <textarea value={promptText} onChange={promptMode === 'edit' ? e => setPromptText(e.target.value) : undefined} readOnly={promptMode === 'view'}
+                    style={{ width: '100%', height: 260, padding: '1.25rem', background: promptMode === 'edit' ? 'white' : '#FAFAFA', border: `1px solid ${promptMode === 'edit' ? '#0d9488' : '#E7E5E4'}`, borderRadius: '0.75rem', fontFamily: 'monospace', fontSize: '0.82rem', lineHeight: 1.7, color: promptMode === 'edit' ? '#1C1917' : '#78716C', resize: 'none', outline: 'none', boxSizing: 'border-box' }} />
+                  {promptMode === 'view' ? (
+                    <button onClick={() => setPromptMode('edit')} style={{ padding: '0.75rem', borderRadius: '0.75rem', border: '1px solid #0d9488', background: 'transparent', color: '#0d9488', fontSize: '0.875rem', fontWeight: 500, cursor: 'pointer' }}>{t('admin_propose')}</button>
+                  ) : (
+                    <div style={{ display: 'flex', gap: '0.75rem' }}>
+                      <button onClick={() => { void proposePrompt() }} disabled={promptSaving || !promptText.trim()}
+                        style={{ flex: 1, padding: '0.75rem', borderRadius: '0.75rem', border: 'none', background: promptSaving || !promptText.trim() ? '#E7E5E4' : 'linear-gradient(135deg,#00685f,#008378)', color: promptSaving || !promptText.trim() ? '#A8A29E' : 'white', fontSize: '0.875rem', fontWeight: 500, cursor: 'pointer' }}>
+                        {promptSaving ? t('admin_sending') : t('admin_send')}
+                      </button>
+                      <button onClick={() => { setPromptMode('view'); void loadActivePrompt() }} style={{ background: 'none', border: 'none', color: '#78716C', fontSize: '0.875rem', cursor: 'pointer', padding: '0.5rem 1rem' }}>{t('admin_cancel')}</button>
+                    </div>
+                  )}
+                </>
+              )}
+              {role === 'superadmin' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <h4 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1C1917', margin: 0 }}>{t('admin_versions_pending')}</h4>
+                  {pendingVersions.length === 0
+                    ? <p style={{ fontSize: '0.8rem', color: '#A8A29E', margin: 0 }}>{t('admin_no_pending')}</p>
+                    : pendingVersions.map(v => (
+                      <div key={v.id} style={{ background: 'white', border: '1px solid #E7E5E4', borderRadius: '0.75rem', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#1C1917' }}>v{v.version}</span>
+                          <span style={{ fontSize: 11, color: '#A8A29E' }}>{t('admin_proposed_by')} {v.proposed_by}</span>
+                        </div>
+                        {rejectingId === v.id ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            <input value={rejectNote} onChange={e => setRejectNote(e.target.value)} placeholder={t('admin_reject_note')} style={{ padding: '0.5rem 0.75rem', border: '1px solid #E7E5E4', borderRadius: '0.5rem', fontSize: '0.8rem', outline: 'none' }} />
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                              <button onClick={() => { void rejectVersion(v.id) }} style={{ flex: 1, padding: '0.5rem', borderRadius: '0.5rem', border: 'none', background: '#DC2626', color: 'white', fontSize: '0.8rem', cursor: 'pointer' }}>{t('admin_confirm_reject')}</button>
+                              <button onClick={() => { setRejectingId(null); setRejectNote('') }} style={{ padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #E7E5E4', background: 'none', fontSize: '0.8rem', cursor: 'pointer' }}>{t('admin_cancel')}</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button onClick={() => { void approveVersion(v.id) }} style={{ flex: 1, padding: '0.5rem', borderRadius: '0.5rem', border: 'none', background: '#059669', color: 'white', fontSize: '0.8rem', cursor: 'pointer' }}>{t('admin_approve')}</button>
+                            <button onClick={() => setRejectingId(v.id)} style={{ flex: 1, padding: '0.5rem', borderRadius: '0.5rem', border: '1px solid #DC2626', background: 'none', color: '#DC2626', fontSize: '0.8rem', cursor: 'pointer' }}>{t('admin_reject')}</button>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  }
+                  {allVersions.length > 0 && (
+                    <>
+                      <h4 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1C1917', margin: '0.5rem 0 0' }}>{t('admin_versions_history')}</h4>
+                      {allVersions.filter(v => v.status !== 'pending_review').map(v => (
+                        <div key={v.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: 'white', border: '1px solid #E7E5E4', borderRadius: '0.75rem' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#1C1917' }}>v{v.version}</span>
+                            <span style={{ fontSize: 11, color: v.status === 'active' ? '#059669' : '#A8A29E' }}>
+                              {v.status === 'active' ? t('admin_status_active') : v.status === 'approved' ? t('admin_status_approved') : v.status === 'rejected' ? t('admin_status_rejected') : t('admin_status_archived')}
+                            </span>
+                          </div>
+                          {v.status !== 'active' && (
+                            <button onClick={() => { void rollbackVersion(v.id) }} style={{ padding: '0.35rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #E7E5E4', background: 'none', fontSize: 11, color: '#78716C', cursor: 'pointer' }}>{t('admin_rollback')}</button>
+                          )}
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
+    </div>
+  )
+}

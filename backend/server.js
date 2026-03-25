@@ -1,4 +1,5 @@
 require('dotenv').config();
+const rateLimit = require('express-rate-limit');
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
@@ -20,6 +21,18 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 app.use(express.json());
+
+// HU-038 — Rate limiting en login (10 intentos por minuto por IP)
+const loginLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { error: 'Demasiados intentos. Intentá de nuevo en un minuto.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// HU-038 — Delay para normalizar tiempo de respuesta (anti timing attacks)
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 const ALGORITMO = 'aes-256-cbc';
 const KEY = Buffer.from(
@@ -81,17 +94,23 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
-// HU-024 — Login con bloqueo tras 3 intentos fallidos
-app.post('/api/login', async (req, res) => {
+// HU-024 + HU-038 — Login con bloqueo + mensaje genérico + rate limiting
+app.post('/api/login', loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     const user = await User.findOne({ where: { email } });
-    if (!user) return res.status(404).json({ error: "Usuario no encontrado." });
 
+    // HU-038: mensaje genérico — no revela si el email existe o no
+    if (!user) {
+      await delay(200);
+      return res.status(401).json({ error: 'Credenciales incorrectas.' });
+    }
+
+    // HU-024: bloqueo por cuenta
     if (user.lockedUntil && new Date() < new Date(user.lockedUntil)) {
       const minutosRestantes = Math.ceil((new Date(user.lockedUntil) - new Date()) / 60000);
       return res.status(423).json({
-        error: `Cuenta bloqueada por demasiados intentos fallidos. Intenta de nuevo en ${minutosRestantes} minuto${minutosRestantes > 1 ? 's' : ''}.`,
+        error: `Cuenta bloqueada. Intentá de nuevo en ${minutosRestantes} minuto${minutosRestantes > 1 ? 's' : ''}.`,
         locked: true
       });
     }
@@ -104,14 +123,14 @@ app.post('/api/login', async (req, res) => {
         const bloqueadoHasta = new Date(Date.now() + 15 * 60 * 1000);
         await user.update({ loginAttempts: nuevosIntentos, lockedUntil: bloqueadoHasta });
         return res.status(423).json({
-          error: 'Cuenta bloqueada por 15 minutos tras 3 intentos fallidos.',
+          error: 'Cuenta bloqueada por 15 minutos.',
           locked: true
         });
       }
       await user.update({ loginAttempts: nuevosIntentos });
-      return res.status(401).json({
-        error: `Contraseña incorrecta. Intento ${nuevosIntentos} de 3.`
-      });
+      // HU-038: mensaje genérico — no dice "contraseña incorrecta"
+      await delay(200);
+      return res.status(401).json({ error: 'Credenciales incorrectas.' });
     }
 
     await user.update({ loginAttempts: 0, lockedUntil: null });
@@ -120,9 +139,11 @@ app.post('/api/login', async (req, res) => {
       JWT_SECRET,
       { expiresIn: '8h' }
     );
-    res.json({ message: "Inicio de sesión exitoso", token, name: user.name, role: user.role });
+    res.json({ message: 'Inicio de sesión exitoso', token, name: user.name, role: user.role });
+
   } catch (error) {
-    res.status(500).json({ error: "Error en el servidor." });
+    console.error('❌ Error en login:', error);
+    res.status(500).json({ error: 'Error en el servidor.' });
   }
 });
 
