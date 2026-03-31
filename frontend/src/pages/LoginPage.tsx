@@ -47,10 +47,17 @@ export function LoginPage() {
         localStorage.setItem('elevation_token', data.token ?? '')
         localStorage.setItem('elevation_role',  data.role  ?? 'user')
         localStorage.setItem('elevation_name',  data.name  ?? '')
-        const checkedToday =
-          localStorage.getItem('elevation_checkin_date') === new Date().toDateString()
-        navigate(checkedToday ? '/app/chat' : '/app/checkin')
-      }
+        const role = data.role ?? 'user'
+          if (role === 'admin' || role === 'superadmin') {
+            navigate('/admin/dashboard')
+          } else if (role === 'therapist') {
+            navigate('/therapist/dashboard')
+          } else {
+            const checkedToday =
+              localStorage.getItem('elevation_checkin_date') === new Date().toDateString()
+            navigate(checkedToday ? '/app/chat' : '/app/checkin')
+          }
+    }
     } catch {
       setAuthMessage(`❌ ${t('err_connection')}`)
     }

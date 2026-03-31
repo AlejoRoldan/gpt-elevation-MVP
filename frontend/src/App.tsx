@@ -4,29 +4,48 @@ import { LoginPage }      from './pages/LoginPage.tsx'
 import { CheckinPage }    from './pages/CheckinPage.tsx'
 import { ChatPage }       from './pages/ChatPage.tsx'
 import { PricingPage }    from './pages/PricingPage.tsx'
+import { AdminLayout }    from './layouts/AdminLayout.tsx'
+import { AdminDashboard } from './pages/admin/AdminDashboard.tsx'
+import { AdminPrompts }   from './pages/admin/AdminPrompts.tsx'
+import { AdminContent } from './pages/admin/AdminContent.tsx'
+import { AdminUsers }  from './pages/admin/AdminUsers.tsx'
+import { AdminMetrics }  from './pages/admin/AdminMetrics.tsx'
 import { ProtectedRoute } from './components/ProtectedRoute.tsx'
 import { AdminRoute }     from './components/AdminRoute.tsx'
 
 export default function App() {
   return (
     <Routes>
+
+      {/* Públicas */}
       <Route path="/"        element={<LandingPage />} />
       <Route path="/login"   element={<LoginPage />} />
       <Route path="/precios" element={<PricingPage />} />
       <Route path="/pricing" element={<PricingPage />} />
 
+      {/* Usuario regular */}
       <Route element={<ProtectedRoute />}>
         <Route path="/app/checkin" element={<CheckinPage />} />
         <Route path="/app/chat"    element={<ChatPage />} />
       </Route>
 
+      {/* Backoffice admin/superadmin */}
       <Route path="/admin" element={
         <AdminRoute>
-          <ChatPage />
+          <AdminLayout />
         </AdminRoute>
-      } />
+      }>
+        <Route index element={<Navigate to="/admin/dashboard" replace />} />
+        <Route path="dashboard" element={<AdminDashboard />} />
+        <Route path="prompts"   element={<AdminPrompts />} />
+        <Route path="contenido" element={<AdminContent />} />
+        <Route path="usuarios"  element={<AdminUsers  />} />
+        <Route path="metricas"  element={<AdminMetrics  />} />
+      </Route>
 
+      {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
+
     </Routes>
   )
 }
