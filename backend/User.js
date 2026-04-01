@@ -20,8 +20,20 @@ const User = sequelize.define('User', {
     allowNull: false,
     defaultValue: 'user'
   },
-
-    loginAttempts: {
+  active: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: true
+  },
+  therapistId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'Users',
+      key: 'id'
+    }
+  },
+  loginAttempts: {
     type: DataTypes.INTEGER,
     defaultValue: 0
   },
@@ -29,7 +41,6 @@ const User = sequelize.define('User', {
     type: DataTypes.DATE,
     allowNull: true
   }
-
 });
 
 module.exports = User;
