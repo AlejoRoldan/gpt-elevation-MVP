@@ -15,6 +15,7 @@ const {
 const LandingContent = require('./LandingContent');
 const MoodLog = require('./MoodLog');
 const SessionRating = require('./SessionRating');
+const adminUsersRouter = require('./routes/adminUsers');
 
 const app = express();
 
@@ -234,6 +235,8 @@ app.get('/api/messages', verificarToken, async (req, res) => {
     res.status(500).json({ error: "No se pudo cargar el historial." });
   }
 });
+
+app.use('/api/admin/usuarios', verificarAdmin, adminUsersRouter);
 
 // ==========================================
 // 🔐 RUTAS DEL BACKOFFICE
