@@ -83,6 +83,21 @@ const en: Record<string, string> = {
   logo: 'ELEVATION',
   tagline: 'Tu santuario digital · Your digital sanctuary',
   btn_logout: 'Sign out',
+
+  // HU-051 — Wellness recommendations
+  rec_title: '✨ Recommendations for you',
+  rec_subtitle: 'Based on your recent emotional state',
+  rec_generate: 'Generate recommendations',
+  rec_regenerate: 'Generate new ones',
+  rec_loading: 'Generating recommendations...',
+  rec_empty: 'No recommendations yet. Generate your first ones now.',
+  rec_error: 'Could not generate recommendations.',
+  rec_category_mindfulness: '🧘 Mindfulness',
+  rec_category_habit: '🌿 Habit',
+  rec_category_reflection: '📓 Reflection',
+  rec_category_resource: '📚 Resource',
+  rec_generated_at: 'Generated',
+  
 }
 
 export { en }
