@@ -364,7 +364,16 @@ export function ChatPage() {
               <p style={{ fontFamily: 'Noto Serif, serif', fontStyle: 'italic', fontSize: '0.95rem', color: '#A8A29E', margin: 0 }}>{t('chat_thinking')}</p>
             </div>
           )}
-
+            {/* HU-052 — Progress link */}
+            <button
+              onClick={() => navigate('/app/progress')}
+              title={lang === 'es' ? 'Mi progreso' : 'My progress'}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#A8A29E', display: 'flex', padding: 4 }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+              </svg>
+            </button>
           {/* HU-051 — Wellness Recommendations */}
           {showRecs && (
             <div style={{ borderLeft: '2px solid #6B7D5C', paddingLeft: '1.25rem' }}>

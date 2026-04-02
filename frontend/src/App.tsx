@@ -16,6 +16,7 @@ import { TherapistLayout }    from './layouts/TherapistLayout.tsx'
 import { TherapistDashboard } from './pages/therapist/TherapistDashboard.tsx'
 import { TherapistPatient }   from './pages/therapist/TherapistPatient.tsx'
 import { TherapistRoute }     from './components/TherapistRoute.tsx'
+import { UserProgress } from './pages/UserProgress.tsx'
 
 export default function App() {
   return (
@@ -31,6 +32,7 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
         <Route path="/app/checkin" element={<CheckinPage />} />
         <Route path="/app/chat"    element={<ChatPage />} />
+        <Route path="/app/progress" element={<UserProgress />} />
       </Route>
 
       {/* Backoffice admin/superadmin */}
