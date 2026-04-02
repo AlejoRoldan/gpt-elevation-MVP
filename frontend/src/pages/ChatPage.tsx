@@ -73,6 +73,12 @@ export function ChatPage() {
   const [checkoutMood,   setCheckoutMood]   = useState<number | null>(null)
   const [checkoutSaving, setCheckoutSaving] = useState(false)
 
+  // HU-051 — Wellness recommendations
+  const [recommendations, setRecommendations] = useState<{id: number; category: string; content: string; generatedAt: string}[]>([])
+  const [loadingRecs,     setLoadingRecs]     = useState(false)
+  const [recsError,       setRecsError]       = useState('')
+  const [showRecs,        setShowRecs]        = useState(false)
+
   // HU-022 — Calificación con estrellas
   const [starRating,     setStarRating]     = useState<number | null>(null)
   const [starHover,      setStarHover]      = useState<number | null>(null)
@@ -112,6 +118,16 @@ export function ChatPage() {
     } catch { /* silencioso */ }
   }, [])
 
+  // HU-051 — Load existing recommendations on mount
+  const loadExistingRecs = useCallback(async () => {
+    try {
+      const res = await apiFetch('/api/recommendations', getToken())
+      if (!res.ok) return
+      const data = await res.json()
+      if (data.length > 0) { setRecommendations(data); setShowRecs(true) }
+    } catch { /* silent */ }
+  }, [])
+
   useEffect(() => {
     const token = getToken()
     if (!token) { navigate('/login'); return }
@@ -122,6 +138,8 @@ export function ChatPage() {
         if (hist.length > 0) setMessages(prev => [prev[0], ...hist])
       }
     })
+    // HU-051 — Load existing recommendations
+    void loadExistingRecs()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -146,8 +164,6 @@ export function ChatPage() {
         body: JSON.stringify({ mood }),
       })
     } catch { /* silencioso */ }
-
-    // HU-022 — guardar calificación si seleccionó estrellas
     if (starRating !== null) {
       try {
         await apiFetch('/api/rating', getToken(), {
@@ -156,7 +172,6 @@ export function ChatPage() {
         })
       } catch { /* silencioso */ }
     }
-
     setCheckoutSaving(false)
     setShowCheckout(false)
     setCheckoutMood(null)
@@ -181,6 +196,23 @@ export function ChatPage() {
       setMessages(prev => [...prev, { role: 'bot', text: t('chat_error') }])
     }
     setSending(false)
+  }
+
+  // HU-051 — Generate recommendations
+  const handleGenerateRecs = async () => {
+    setLoadingRecs(true)
+    setRecsError('')
+    setShowRecs(true)
+    try {
+      const res = await apiFetch('/api/recommendations/generate', getToken(), { method: 'POST' })
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      setRecommendations(data)
+    } catch {
+      setRecsError(t('rec_error'))
+    } finally {
+      setLoadingRecs(false)
+    }
   }
 
   const openAdmin = () => {
@@ -288,6 +320,16 @@ export function ChatPage() {
                 </svg>
               </button>
             )}
+            {/* HU-051 — Recommendations toggle */}
+            <button
+              onClick={() => setShowRecs(!showRecs)}
+              title={t('rec_title')}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: showRecs ? '#6B7D5C' : '#A8A29E', display: 'flex', padding: 4 }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+              </svg>
+            </button>
             <button onClick={() => setShowCheckout(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#A8A29E', display: 'flex', padding: 4 }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
@@ -322,6 +364,57 @@ export function ChatPage() {
               <p style={{ fontFamily: 'Noto Serif, serif', fontStyle: 'italic', fontSize: '0.95rem', color: '#A8A29E', margin: 0 }}>{t('chat_thinking')}</p>
             </div>
           )}
+
+          {/* HU-051 — Wellness Recommendations */}
+          {showRecs && (
+            <div style={{ borderLeft: '2px solid #6B7D5C', paddingLeft: '1.25rem' }}>
+              <span style={{ display: 'block', fontSize: 10, fontWeight: 600, letterSpacing: '0.2em', color: '#6B7D5C', textTransform: 'uppercase', marginBottom: '0.4rem' }}>
+                {t('rec_title')}
+              </span>
+              <p style={{ fontSize: '0.78rem', color: '#78716C', margin: '0 0 1rem', fontFamily: 'Inter, sans-serif' }}>
+                {t('rec_subtitle')}
+              </p>
+              {loadingRecs && (
+                <p style={{ fontFamily: 'Noto Serif, serif', fontStyle: 'italic', fontSize: '0.95rem', color: '#A8A29E' }}>
+                  {t('rec_loading')}
+                </p>
+              )}
+              {recsError && (
+                <p style={{ fontSize: '0.875rem', color: '#DC2626' }}>{recsError}</p>
+              )}
+              {!loadingRecs && recommendations.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1rem' }}>
+                  {recommendations.slice(0, 3).map(rec => (
+                    <div key={rec.id} style={{
+                      background: '#fff', borderRadius: '0.85rem',
+                      border: '0.5px solid #E7E5E4', padding: '0.85rem 1rem',
+                      boxShadow: '0 2px 8px rgba(26,28,27,0.04)',
+                    }}>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 600, color: '#6B7D5C', marginBottom: '0.35rem', fontFamily: 'Inter, sans-serif' }}>
+                        {t(`rec_category_${rec.category}`)}
+                      </div>
+                      <p style={{ fontFamily: 'Noto Serif, serif', fontStyle: 'italic', fontSize: '0.9rem', color: '#1C1917', lineHeight: 1.65, margin: 0 }}>
+                        {rec.content}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button
+                onClick={() => { void handleGenerateRecs() }}
+                disabled={loadingRecs}
+                style={{
+                  fontSize: '0.78rem', color: '#6B7D5C', background: 'none',
+                  border: '0.5px solid #6B7D5C', borderRadius: '0.65rem',
+                  padding: '0.4rem 0.85rem', cursor: loadingRecs ? 'not-allowed' : 'pointer',
+                  fontFamily: 'Inter, sans-serif',
+                }}
+              >
+                {loadingRecs ? t('rec_loading') : recommendations.length > 0 ? t('rec_regenerate') : t('rec_generate')}
+              </button>
+            </div>
+          )}
+
           <div ref={chatEndRef} />
         </div>
       </main>
@@ -347,17 +440,13 @@ export function ChatPage() {
       {showCheckout && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(26,28,27,0.15)', backdropFilter: 'blur(4px)' }}>
           <div style={{ background: '#FAF8F4', borderRadius: '1.25rem', padding: '2.5rem 2rem', maxWidth: 400, width: '90%', display: 'flex', flexDirection: 'column', gap: '1.5rem', alignItems: 'center', border: '0.5px solid #E7E5E4' }}>
-
             <p style={{ fontSize: 10, letterSpacing: '0.15em', color: '#A8A29E', margin: 0, textTransform: 'uppercase' }}>CHECK-OUT</p>
-
             <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: '1.4rem', fontWeight: 400, color: '#1C1917', margin: 0, textAlign: 'center' }}>
               {lang === 'es' ? '¿Cómo te vas?' : 'How are you leaving?'}
             </h3>
             <p style={{ fontSize: '0.85rem', color: '#78716C', margin: 0, textAlign: 'center' }}>
               {lang === 'es' ? 'Tomá un momento antes de cerrar.' : 'Take a moment before closing.'}
             </p>
-
-            {/* Emojis — HU-021 */}
             <div style={{ display: 'flex', gap: '0.75rem' }}>
               {CHECKOUT_MOODS.map(m => (
                 <button key={m.value} onClick={() => setCheckoutMood(m.value)}
@@ -372,8 +461,6 @@ export function ChatPage() {
                 </button>
               ))}
             </div>
-
-            {/* Estrellas — HU-022 — aparecen después de seleccionar emoji */}
             {checkoutMood !== null && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', width: '100%' }}>
                 <p style={{ fontSize: '0.8rem', color: '#78716C', margin: 0 }}>
@@ -386,9 +473,7 @@ export function ChatPage() {
                       onMouseEnter={() => setStarHover(star)}
                       onMouseLeave={() => setStarHover(null)}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', fontSize: 28, lineHeight: 1, transition: 'transform 0.1s', transform: starHover === star ? 'scale(1.2)' : 'scale(1)' }}>
-                      <span style={{ color: star <= (starHover ?? starRating ?? 0) ? '#6B7D5C' : '#D6D2C4' }}>
-                        ★
-                      </span>
+                      <span style={{ color: star <= (starHover ?? starRating ?? 0) ? '#6B7D5C' : '#D6D2C4' }}>★</span>
                     </button>
                   ))}
                 </div>
@@ -399,8 +484,6 @@ export function ChatPage() {
                 )}
               </div>
             )}
-
-            {/* Botones */}
             <div style={{ display: 'flex', gap: '0.75rem', width: '100%' }}>
               <button
                 onClick={() => { if (checkoutMood !== null) void handleCheckout(checkoutMood) }}
@@ -420,7 +503,6 @@ export function ChatPage() {
                 {lang === 'es' ? 'Saltar' : 'Skip'}
               </button>
             </div>
-
           </div>
         </div>
       )}
