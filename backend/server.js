@@ -19,6 +19,8 @@ const adminUsersRouter = require('./routes/adminUsers');
 const therapistRouter = require('./routes/therapistRoutes');
 const ClinicalNote = require('./ClinicalNote');
 const WellnessRecommendation = require('./WellnessRecommendation');
+const TherapistProfile = require('./TherapistProfile');
+const MatchingRequest  = require('./MatchingRequest');
 
 const app = express();
 
@@ -87,6 +89,10 @@ connectDB().then(() => {
   ClinicalNote.belongsTo(User, { foreignKey: 'UserId' });
   User.hasMany(WellnessRecommendation, { foreignKey: 'UserId' });
   WellnessRecommendation.belongsTo(User, { foreignKey: 'UserId' });
+  User.hasOne(TherapistProfile, { foreignKey: 'UserId' });
+  TherapistProfile.belongsTo(User, { foreignKey: 'UserId' });
+  User.hasMany(MatchingRequest, { foreignKey: 'UserId' });
+  MatchingRequest.belongsTo(User, { foreignKey: 'UserId' });
   sequelize.sync({ alter: true })
     .then(() => console.log('✅ Tablas sincronizadas en PostgreSQL.'))
     .catch(err => console.error('❌ Error sincronizando tablas:', err));
@@ -813,6 +819,200 @@ app.get('/api/admin/metrics', verificarAdmin, async (req, res) => {
   } catch (error) {
     console.error('❌ Error fetching metrics:', error);
     res.status(500).json({ error: 'Could not fetch metrics.' });
+  }
+});
+
+// ==========================================
+// 🤝 HU-060 — MATCHING USUARIO-TERAPEUTA
+// ==========================================
+
+// GET /api/therapist/profile — terapeuta ve/edita su perfil
+app.get('/api/therapist/profile', verificarToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'therapist') return res.status(403).json({ error: 'Therapists only.' });
+    let profile = await TherapistProfile.findOne({ where: { UserId: req.user.id } });
+    if (!profile) {
+      profile = await TherapistProfile.create({ UserId: req.user.id });
+    }
+    res.json(profile);
+  } catch (error) {
+    res.status(500).json({ error: 'Could not fetch profile.' });
+  }
+});
+
+// PUT /api/therapist/profile — terapeuta actualiza su perfil
+app.put('/api/therapist/profile', verificarToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'therapist') return res.status(403).json({ error: 'Therapists only.' });
+    const { specialties, approach, languages, bio, maxPatients, acceptingNew } = req.body;
+    let profile = await TherapistProfile.findOne({ where: { UserId: req.user.id } });
+    if (!profile) profile = await TherapistProfile.create({ UserId: req.user.id });
+    await profile.update({ specialties, approach, languages, bio, maxPatients, acceptingNew });
+    res.json({ message: 'Profile updated.', profile });
+  } catch (error) {
+    res.status(500).json({ error: 'Could not update profile.' });
+  }
+});
+
+// POST /api/matching/request — usuario envía cuestionario y recibe sugerencias IA
+app.post('/api/matching/request', verificarToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { answers } = req.body;
+
+    if (!answers) return res.status(400).json({ error: 'Answers are required.' });
+
+    // Get available therapists with profiles
+    const therapists = await User.findAll({
+      where: { role: 'therapist', active: true },
+      attributes: ['id', 'name'],
+      include: [{ model: TherapistProfile, required: false }],
+    });
+
+    const availableTherapists = therapists.filter(t =>
+      !t.TherapistProfile || t.TherapistProfile.acceptingNew !== false
+    );
+
+    if (availableTherapists.length === 0) {
+      return res.status(404).json({ error: 'No therapists available at this time.' });
+    }
+
+    // Get user mood context
+    const moodLogs = await MoodLog.findAll({
+      where: { UserId: userId },
+      order: [['date', 'DESC']],
+      limit: 14,
+    });
+
+    const avgMood = moodLogs.length > 0
+      ? (moodLogs.flatMap(m => [m.checkin_mood, m.checkout_mood])
+          .filter(Boolean)
+          .reduce((a, b) => a + b, 0) / moodLogs.length).toFixed(1)
+      : 'No data';
+
+    const therapistList = availableTherapists.map(t => ({
+      id: t.id,
+      name: t.name,
+      specialties: t.TherapistProfile?.specialties ?? [],
+      approach: t.TherapistProfile?.approach ?? 'General wellness',
+      languages: t.TherapistProfile?.languages ?? ['es'],
+      bio: t.TherapistProfile?.bio ?? '',
+    }));
+
+    const prompt = `You are a matching assistant for Elevation, a mental health platform.
+
+User questionnaire answers:
+- Main area to work on: ${answers.area ?? 'Not specified'}
+- Preferred style: ${answers.style ?? 'Not specified'}
+- Preferred language: ${answers.language ?? 'Spanish'}
+
+User emotional context:
+- Average mood (1-5): ${avgMood}
+- Recent sessions: ${moodLogs.length}
+
+Available therapists:
+${therapistList.map(t => `ID: ${t.id} | Name: ${t.name} | Specialties: ${t.specialties.join(', ')} | Approach: ${t.approach} | Languages: ${t.languages.join(', ')}`).join('\n')}
+
+Return ONLY a valid JSON array with the top 3 matches (or fewer if less available). No markdown, no extra text:
+[
+  { "therapistId": <id>, "score": <1-10>, "reason": "<one sentence why this therapist fits>" },
+  ...
+]`;
+
+    const msg = await anthropic.messages.create({
+      model: 'claude-3-haiku-20240307',
+      max_tokens: 400,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    let suggestions = [];
+    try {
+      const raw = msg.content[0].text.replace(/```json|```/g, '').trim();
+      suggestions = JSON.parse(raw);
+    } catch {
+      return res.status(500).json({ error: 'Could not parse suggestions.' });
+    }
+
+    // Save matching request
+    const request = await MatchingRequest.create({
+      UserId: userId,
+      answers,
+      suggestions,
+      status: 'pending',
+    });
+
+    // Add therapist names to suggestions for frontend
+    const suggestionsWithNames = suggestions.map(s => ({
+      ...s,
+      therapistName: therapistList.find(t => t.id === s.therapistId)?.name ?? 'Unknown',
+    }));
+
+    res.json({ requestId: request.id, suggestions: suggestionsWithNames });
+  } catch (error) {
+    console.error('❌ Error in matching:', error);
+    res.status(500).json({ error: 'Could not process matching request.' });
+  }
+});
+
+// POST /api/matching/choose — usuario elige terapeuta
+app.post('/api/matching/choose', verificarToken, async (req, res) => {
+  try {
+    const { requestId, therapistId } = req.body;
+    const request = await MatchingRequest.findOne({
+      where: { id: requestId, UserId: req.user.id },
+    });
+    if (!request) return res.status(404).json({ error: 'Request not found.' });
+    await request.update({ chosenTherapistId: therapistId, status: 'pending' });
+    res.json({ message: 'Therapist chosen. Waiting for admin confirmation.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Could not save choice.' });
+  }
+});
+
+// GET /api/admin/matching/pending — admin ve solicitudes pendientes
+app.get('/api/admin/matching/pending', verificarAdmin, async (req, res) => {
+  try {
+    const requests = await MatchingRequest.findAll({
+      where: { status: 'pending', chosenTherapistId: { [require('sequelize').Op.ne]: null } },
+      order: [['createdAt', 'DESC']],
+    });
+
+    const enriched = await Promise.all(requests.map(async r => {
+      const user = await User.findByPk(r.UserId, { attributes: ['id', 'name', 'email'] });
+      const therapist = await User.findByPk(r.chosenTherapistId, { attributes: ['id', 'name'] });
+      return {
+        id: r.id,
+        user: user?.toJSON(),
+        chosenTherapist: therapist?.toJSON(),
+        answers: r.answers,
+        createdAt: r.createdAt,
+      };
+    }));
+
+    res.json(enriched);
+  } catch (error) {
+    res.status(500).json({ error: 'Could not fetch pending requests.' });
+  }
+});
+
+// POST /api/admin/matching/:id/confirm — admin confirma asignación
+app.post('/api/admin/matching/:id/confirm', verificarAdmin, async (req, res) => {
+  try {
+    const request = await MatchingRequest.findByPk(req.params.id);
+    if (!request) return res.status(404).json({ error: 'Request not found.' });
+    if (!request.chosenTherapistId) return res.status(400).json({ error: 'No therapist chosen yet.' });
+
+    // Assign therapist to user
+    await User.update(
+      { therapistId: request.chosenTherapistId },
+      { where: { id: request.UserId } }
+    );
+
+    await request.update({ status: 'confirmed' });
+
+    res.json({ message: 'Therapist assigned successfully.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Could not confirm assignment.' });
   }
 });
 

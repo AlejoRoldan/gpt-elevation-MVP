@@ -1,5 +1,4 @@
-
-// HU-045 — Gestión de usuarios desde backoffice
+// HU-045 + HU-060 — User management + matching requests
 
 import { useState, useEffect } from 'react';
 
@@ -24,6 +23,15 @@ interface Terapeuta {
   email: string;
 }
 
+// HU-060
+interface MatchingRequest {
+  id: number;
+  user: { id: number; name: string; email: string };
+  chosenTherapist: { id: number; name: string };
+  answers: { area?: string; style?: string; language?: string };
+  createdAt: string;
+}
+
 const API = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
 const getToken = () => localStorage.getItem('elevation_token') || '';
 
@@ -45,28 +53,33 @@ const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
 
 export function AdminUsers() {
-  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
-  const [terapeutas, setTerapeutas] = useState<Terapeuta[]>([]);
-  const [cargando, setCargando] = useState(true);
-  const [error, setError] = useState('');
-  const [filtroRol, setFiltroRol] = useState('');
-  const [filtroEstado, setFiltroEstado] = useState('');
+  const [usuarios,           setUsuarios]           = useState<Usuario[]>([]);
+  const [terapeutas,         setTerapeutas]         = useState<Terapeuta[]>([]);
+  const [cargando,           setCargando]           = useState(true);
+  const [error,              setError]              = useState('');
+  const [filtroRol,          setFiltroRol]          = useState('');
+  const [filtroEstado,       setFiltroEstado]       = useState('');
   const [usuarioSeleccionado, setUsuarioSeleccionado] = useState<Usuario | null>(null);
-  const [mostrarModal, setMostrarModal] = useState(false);
-  const [nuevoUsuario, setNuevoUsuario] = useState({ name: '', email: '', password: '', role: 'user' as Role });
-  const [creando, setCreando] = useState(false);
-  const [errorModal, setErrorModal] = useState('');
-  const [exitoModal, setExitoModal] = useState('');
+  const [mostrarModal,       setMostrarModal]       = useState(false);
+  const [nuevoUsuario,       setNuevoUsuario]       = useState({ name: '', email: '', password: '', role: 'user' as Role });
+  const [creando,            setCreando]            = useState(false);
+  const [errorModal,         setErrorModal]         = useState('');
+  const [exitoModal,         setExitoModal]         = useState('');
 
-  const role = localStorage.getItem('elevation_role') ?? 'admin';
+  // HU-060 — Matching requests
+  const [matchingRequests,   setMatchingRequests]   = useState<MatchingRequest[]>([]);
+  const [showMatching,       setShowMatching]       = useState(false);
+  const [confirmingId,       setConfirmingId]       = useState<number | null>(null);
+
+  const role        = localStorage.getItem('elevation_role') ?? 'admin';
   const esSuperAdmin = role === 'superadmin';
 
   const fetchUsuarios = async () => {
     setCargando(true); setError('');
     try {
       const params = new URLSearchParams();
-      if (filtroRol) params.append('role', filtroRol);
-      if (filtroEstado !== '') params.append('active', filtroEstado);
+      if (filtroRol)    params.append('role',   filtroRol);
+      if (filtroEstado) params.append('active', filtroEstado);
       const res = await fetch(`${API}/api/admin/usuarios?${params}`, {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
@@ -75,10 +88,40 @@ export function AdminUsers() {
       setUsuarios(data);
       setTerapeutas(data.filter((u: Usuario) => u.role === 'therapist' && u.active));
     } catch { setError('No se pudo cargar la lista de usuarios.'); }
-    finally { setCargando(false); }
+    finally   { setCargando(false); }
   };
 
-  useEffect(() => { fetchUsuarios(); }, [filtroRol, filtroEstado]);
+  // HU-060 — Fetch pending matching requests
+  const fetchMatching = async () => {
+    try {
+      const res = await fetch(`${API}/api/admin/matching/pending`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setMatchingRequests(data);
+    } catch { /* silent */ }
+  };
+
+  useEffect(() => {
+    fetchUsuarios();
+    fetchMatching();
+  }, [filtroRol, filtroEstado]);
+
+  // HU-060 — Confirm matching assignment
+  const confirmMatching = async (requestId: number) => {
+    setConfirmingId(requestId);
+    try {
+      const res = await fetch(`${API}/api/admin/matching/${requestId}/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      });
+      if (!res.ok) { const d = await res.json(); alert(d.error || 'Error'); return; }
+      await fetchMatching();
+      await fetchUsuarios();
+    } catch { alert('Connection error'); }
+    finally { setConfirmingId(null); }
+  };
 
   const toggleActivo = async (usuario: Usuario) => {
     const res = await fetch(`${API}/api/admin/usuarios/${usuario.id}`, {
@@ -103,26 +146,19 @@ export function AdminUsers() {
   };
 
   const asignarTerapeuta = async (usuarioId: number, therapistId: number | null) => {
-  try {
-    const res = await fetch(`${API}/api/admin/usuarios/${usuarioId}/asignar-terapeuta`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify({ therapistId }),
-    });
-    if (!res.ok) {
-      const d = await res.json();
-      alert(d.error || 'Error al asignar terapeuta');
-      return;
-    }
-    await fetchUsers();
-    // Actualiza el panel lateral inmediatamente
-    setUsuarioSeleccionado(prev =>
-      prev?.id === usuarioId ? { ...prev, therapistId } : prev
-    );
-  } catch {
-    alert('Connection error');
-  }
-};
+    try {
+      const res = await fetch(`${API}/api/admin/usuarios/${usuarioId}/asignar-terapeuta`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify({ therapistId }),
+      });
+      if (!res.ok) { const d = await res.json(); alert(d.error || 'Error al asignar terapeuta'); return; }
+      await fetchUsuarios();
+      setUsuarioSeleccionado(prev =>
+        prev?.id === usuarioId ? { ...prev, therapistId } : prev
+      );
+    } catch { alert('Connection error'); }
+  };
 
   const crearUsuario = async () => {
     setErrorModal(''); setExitoModal('');
@@ -163,14 +199,75 @@ export function AdminUsers() {
             {usuarios.length} usuario{usuarios.length !== 1 ? 's' : ''} registrado{usuarios.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <button onClick={() => setMostrarModal(true)} style={{
-          display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.6rem 1.2rem',
-          background: '#6B7D5C', color: '#fff', border: 'none', borderRadius: '0.85rem',
-          fontSize: '0.875rem', fontWeight: 500, cursor: 'pointer', fontFamily: 'Inter, sans-serif',
-        }}>
-          + Crear usuario
-        </button>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          {/* HU-060 — Matching badge */}
+          {matchingRequests.length > 0 && (
+            <button
+              onClick={() => setShowMatching(!showMatching)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '0.4rem',
+                padding: '0.6rem 1.2rem', background: '#FEF3C7',
+                color: '#92400E', border: '0.5px solid #FCD34D',
+                borderRadius: '0.85rem', fontSize: '0.875rem',
+                fontWeight: 500, cursor: 'pointer', fontFamily: 'Inter, sans-serif',
+              }}
+            >
+              🤝 {matchingRequests.length} matching pending
+            </button>
+          )}
+          <button onClick={() => setMostrarModal(true)} style={{
+            display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.6rem 1.2rem',
+            background: '#6B7D5C', color: '#fff', border: 'none', borderRadius: '0.85rem',
+            fontSize: '0.875rem', fontWeight: 500, cursor: 'pointer', fontFamily: 'Inter, sans-serif',
+          }}>
+            + Crear usuario
+          </button>
+        </div>
       </div>
+
+      {/* HU-060 — MATCHING REQUESTS PANEL */}
+      {showMatching && matchingRequests.length > 0 && (
+        <div style={{
+          background: '#fff', borderRadius: '1rem', border: '0.5px solid #FCD34D',
+          boxShadow: '0 2px 12px rgba(26,28,27,0.06)', padding: '1.25rem 1.5rem',
+          marginBottom: '1.5rem',
+        }}>
+          <h2 style={{ fontFamily: 'Playfair Display, serif', fontWeight: 400, fontSize: '1.1rem', color: '#1C1917', margin: '0 0 1rem' }}>
+            🤝 Pending matching requests
+          </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {matchingRequests.map(req => (
+              <div key={req.id} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '0.85rem 1rem', background: '#FFFBEB', borderRadius: '0.75rem',
+                border: '0.5px solid #FCD34D', flexWrap: 'wrap', gap: '0.75rem',
+              }}>
+                <div>
+                  <div style={{ fontWeight: 500, fontSize: '0.9rem', color: '#1C1917' }}>
+                    {req.user?.name} → {req.chosenTherapist?.name}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: '#78716C', marginTop: '0.2rem' }}>
+                    Area: {req.answers?.area ?? '—'} · Style: {req.answers?.style ?? '—'} · {formatDate(req.createdAt)}
+                  </div>
+                </div>
+                <button
+                  onClick={() => confirmMatching(req.id)}
+                  disabled={confirmingId === req.id}
+                  style={{
+                    padding: '0.45rem 1rem', background: confirmingId === req.id ? '#A8B5A2' : '#6B7D5C',
+                    color: '#fff', border: 'none', borderRadius: '0.65rem',
+                    fontSize: '0.82rem', fontWeight: 500,
+                    cursor: confirmingId === req.id ? 'not-allowed' : 'pointer',
+                    fontFamily: 'Inter, sans-serif',
+                  }}
+                >
+                  {confirmingId === req.id ? 'Confirming...' : 'Confirm assignment'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* FILTROS */}
       <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
@@ -189,7 +286,7 @@ export function AdminUsers() {
       </div>
 
       {cargando && <p style={{ color: '#78716C', fontSize: '0.875rem' }}>Cargando usuarios...</p>}
-      {error && <p style={{ color: '#DC2626', fontSize: '0.875rem' }}>{error}</p>}
+      {error    && <p style={{ color: '#DC2626', fontSize: '0.875rem' }}>{error}</p>}
 
       {!cargando && !error && (
         <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'flex-start' }}>
@@ -243,14 +340,13 @@ export function AdminUsers() {
                 <div style={{ fontSize: '0.78rem', color: '#78716C' }}>{usuarioSeleccionado.email}</div>
                 <div style={{ fontSize: '0.75rem', color: '#A8B5A2', marginTop: '0.35rem' }}>Desde {formatDate(usuarioSeleccionado.createdAt)}</div>
               </div>
-
               <div style={{ marginBottom: '1.25rem', paddingBottom: '1rem', borderBottom: '0.5px solid #F5F3EF' }}>
                 <div style={{ fontSize: '0.72rem', fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.65rem' }}>Estadísticas</div>
                 <div style={{ display: 'flex', gap: '0.75rem' }}>
                   {[
                     { label: 'Sesiones', value: usuarioSeleccionado.sesiones ?? '—' },
-                    { label: 'Mood', value: usuarioSeleccionado.moodPromedio ?? '—' },
-                    { label: 'Rating', value: usuarioSeleccionado.ratingPromedio ? `${usuarioSeleccionado.ratingPromedio}★` : '—' },
+                    { label: 'Mood',     value: usuarioSeleccionado.moodPromedio ?? '—' },
+                    { label: 'Rating',   value: usuarioSeleccionado.ratingPromedio ? `${usuarioSeleccionado.ratingPromedio}★` : '—' },
                   ].map(s => (
                     <div key={s.label} style={{ flex: 1, textAlign: 'center', background: '#F5F3EF', borderRadius: '0.65rem', padding: '0.5rem 0.25rem' }}>
                       <div style={{ fontSize: '1rem', fontWeight: 600, color: '#1C1917' }}>{s.value}</div>
@@ -259,7 +355,6 @@ export function AdminUsers() {
                   ))}
                 </div>
               </div>
-
               <div style={{ marginBottom: '1rem' }}>
                 <div style={{ fontSize: '0.72rem', fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Rol</div>
                 <select style={{ ...sel, width: '100%' }} value={usuarioSeleccionado.role} onChange={e => cambiarRol(usuarioSeleccionado, e.target.value as Role)}>
@@ -269,7 +364,6 @@ export function AdminUsers() {
                   {esSuperAdmin && <option value="superadmin">superadmin</option>}
                 </select>
               </div>
-
               {usuarioSeleccionado.role === 'user' && (
                 <div style={{ marginBottom: '1rem' }}>
                   <div style={{ fontSize: '0.72rem', fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Terapeuta asignado</div>
@@ -280,7 +374,6 @@ export function AdminUsers() {
                   </select>
                 </div>
               )}
-
               <button onClick={() => toggleActivo(usuarioSeleccionado)} style={{
                 width: '100%', padding: '0.6rem', borderRadius: '0.85rem', border: 'none',
                 background: usuarioSeleccionado.active ? '#FEE2E2' : '#EAF0E6',
@@ -303,13 +396,11 @@ export function AdminUsers() {
               <button onClick={() => { setMostrarModal(false); setErrorModal(''); setExitoModal(''); }}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#78716C' }}>✕</button>
             </div>
-
             {errorModal && <div style={{ background: '#FEE2E2', color: '#DC2626', padding: '0.65rem 1rem', borderRadius: '0.65rem', fontSize: '0.875rem', marginBottom: '1rem' }}>{errorModal}</div>}
             {exitoModal && <div style={{ background: '#EAF0E6', color: '#4A6741', padding: '0.65rem 1rem', borderRadius: '0.65rem', fontSize: '0.875rem', marginBottom: '1rem' }}>{exitoModal}</div>}
-
             {[
-              { label: 'Nombre completo', key: 'name', type: 'text', placeholder: 'Ana García' },
-              { label: 'Email', key: 'email', type: 'email', placeholder: 'ana@example.com' },
+              { label: 'Nombre completo',    key: 'name',     type: 'text',     placeholder: 'Ana García' },
+              { label: 'Email',              key: 'email',    type: 'email',    placeholder: 'ana@example.com' },
               { label: 'Contraseña temporal', key: 'password', type: 'password', placeholder: 'Mínimo 8 caracteres' },
             ].map(campo => (
               <div key={campo.key} style={{ marginBottom: '1rem' }}>
@@ -321,7 +412,6 @@ export function AdminUsers() {
                 />
               </div>
             ))}
-
             <div style={{ marginBottom: '1.5rem' }}>
               <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem' }}>Rol</label>
               <select style={{ ...sel, width: '100%' }} value={nuevoUsuario.role} onChange={e => setNuevoUsuario(prev => ({ ...prev, role: e.target.value as Role }))}>
@@ -331,7 +421,6 @@ export function AdminUsers() {
                 {esSuperAdmin && <option value="superadmin">superadmin</option>}
               </select>
             </div>
-
             <button onClick={crearUsuario} disabled={creando} style={{
               width: '100%', padding: '0.75rem', background: creando ? '#A8B5A2' : '#6B7D5C',
               color: '#fff', border: 'none', borderRadius: '0.85rem', fontSize: '0.9rem',
