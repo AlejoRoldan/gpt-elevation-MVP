@@ -12,6 +12,10 @@ import { AdminUsers }  from './pages/admin/AdminUsers.tsx'
 import { AdminMetrics }  from './pages/admin/AdminMetrics.tsx'
 import { ProtectedRoute } from './components/ProtectedRoute.tsx'
 import { AdminRoute }     from './components/AdminRoute.tsx'
+import { TherapistLayout }    from './layouts/TherapistLayout.tsx'
+import { TherapistDashboard } from './pages/therapist/TherapistDashboard.tsx'
+import { TherapistPatient }   from './pages/therapist/TherapistPatient.tsx'
+import { TherapistRoute }     from './components/TherapistRoute.tsx'
 
 export default function App() {
   return (
@@ -42,6 +46,15 @@ export default function App() {
         <Route path="usuarios"  element={<AdminUsers  />} />
         <Route path="metricas"  element={<AdminMetrics  />} />
       </Route>
+
+{/* Therapist */}
+<Route element={<TherapistRoute />}>
+  <Route element={<TherapistLayout />}>
+    <Route path="/therapist/dashboard" element={<TherapistDashboard />} />
+    <Route path="/therapist/patient/:id" element={<TherapistPatient />} />
+  </Route>
+</Route>
+
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />

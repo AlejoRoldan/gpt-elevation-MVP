@@ -16,6 +16,7 @@ const LandingContent = require('./LandingContent');
 const MoodLog = require('./MoodLog');
 const SessionRating = require('./SessionRating');
 const adminUsersRouter = require('./routes/adminUsers');
+const therapistRouter = require('./routes/therapistRoutes');
 
 const app = express();
 
@@ -237,6 +238,9 @@ app.get('/api/messages', verificarToken, async (req, res) => {
 });
 
 app.use('/api/admin/usuarios', verificarAdmin, adminUsersRouter);
+
+// HU-046 — Therapist Routes
+app.use('/api/therapist', verificarToken, therapistRouter);
 
 // ==========================================
 // 🔐 RUTAS DEL BACKOFFICE
