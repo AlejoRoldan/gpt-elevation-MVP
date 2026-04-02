@@ -17,6 +17,7 @@ const MoodLog = require('./MoodLog');
 const SessionRating = require('./SessionRating');
 const adminUsersRouter = require('./routes/adminUsers');
 const therapistRouter = require('./routes/therapistRoutes');
+const ClinicalNote = require('./ClinicalNote');
 
 const app = express();
 
@@ -81,6 +82,8 @@ connectDB().then(() => {
   MoodLog.belongsTo(User);
   User.hasMany(SessionRating);
   SessionRating.belongsTo(User);
+  User.hasMany(ClinicalNote, { foreignKey: 'UserId' });
+  ClinicalNote.belongsTo(User, { foreignKey: 'UserId' });
   sequelize.sync({ alter: true })
     .then(() => console.log('✅ Tablas sincronizadas en PostgreSQL.'))
     .catch(err => console.error('❌ Error sincronizando tablas:', err));
@@ -197,21 +200,26 @@ app.post('/api/chat', verificarToken, async (req, res) => {
   const mensajeUsuario = req.body.message;
   const userId = req.user.id;
   try {
-    let systemPrompt = await getActivePrompt('elevation_system_prompt');
-    if (!systemPrompt) {
-      systemPrompt = "Eres Elevation, un acompañante empático de bienestar emocional. Escuchas activamente y haces preguntas reflexivas. Tus respuestas son concisas, cálidas y nunca usas emojis.";
+    // HU-049 — Use therapist prompt if user has an assigned therapist
+    const user = await User.findByPk(userId, { attributes: ['therapistId'] });
+
+    let systemPrompt = null;
+
+    if (user?.therapistId) {
+      systemPrompt = await getActivePrompt(`therapist_prompt_${user.therapistId}`);
     }
-    await Message.create({ role: 'user', content: encriptar(mensajeUsuario), UserId: userId });
-    const msg = await anthropic.messages.create({
-      model: "claude-3-haiku-20240307",
-      max_tokens: 1000,
-      system: systemPrompt,
-      messages: [{ role: "user", content: mensajeUsuario }]
-    });
-    const respuestaIA = msg.content[0].text;
-    await Message.create({ role: 'assistant', content: encriptar(respuestaIA), UserId: userId });
-    res.json({ reply: respuestaIA });
-  } catch (error) {
+
+    // Fallback to general Elevation prompt
+    if (!systemPrompt) {
+      systemPrompt = await getActivePrompt('elevation_system_prompt');
+    }
+
+    // Final fallback hardcoded
+    if (!systemPrompt) {
+      systemPrompt = "You are Elevation, an empathetic emotional wellness companion. You listen actively and ask reflective questions. Your responses are concise, warm and you never use emojis.";
+    }
+  } 
+    catch (error) {
     console.error("❌ Error de comunicación:", error);
     res.status(500).json({ reply: "Lo siento, tuve una pequeña desconexión. ¿Podrías repetirme eso?" });
   }

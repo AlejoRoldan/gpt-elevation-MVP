@@ -103,14 +103,26 @@ export function AdminUsers() {
   };
 
   const asignarTerapeuta = async (usuarioId: number, therapistId: number | null) => {
+  try {
     const res = await fetch(`${API}/api/admin/usuarios/${usuarioId}/asignar-terapeuta`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
       body: JSON.stringify({ therapistId }),
     });
-    if (!res.ok) { const d = await res.json(); alert(d.error || 'Error'); return; }
-    await fetchUsuarios();
-  };
+    if (!res.ok) {
+      const d = await res.json();
+      alert(d.error || 'Error al asignar terapeuta');
+      return;
+    }
+    await fetchUsers();
+    // Actualiza el panel lateral inmediatamente
+    setUsuarioSeleccionado(prev =>
+      prev?.id === usuarioId ? { ...prev, therapistId } : prev
+    );
+  } catch {
+    alert('Connection error');
+  }
+};
 
   const crearUsuario = async () => {
     setErrorModal(''); setExitoModal('');
