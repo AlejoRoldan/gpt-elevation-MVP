@@ -53,9 +53,7 @@ export function LoginPage() {
           } else if (role === 'therapist') {
             navigate('/therapist/dashboard')
           } else {
-            const checkedToday =
-              localStorage.getItem('elevation_checkin_date') === new Date().toDateString()
-            navigate(checkedToday ? '/app/chat' : '/app/checkin')
+            navigate('/app/dashboard')
           }
     }
     } catch {
