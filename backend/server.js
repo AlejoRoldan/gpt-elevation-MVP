@@ -1,37 +1,46 @@
 require('dotenv').config();
-const rateLimit = require('express-rate-limit');
-const express = require('express');
-const cors = require('cors');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const crypto = require('crypto');
-const Anthropic = require('@anthropic-ai/sdk');
-const { connectDB, sequelize } = require('./database');
-const User = require('./User');
-const Message = require('./Message');
-const { 
-  PromptVault, getActivePrompt, savePrompt, proposePrompt, approvePrompt, rejectPrompt, rollbackPrompt 
-} = require('./promptVault');
-const LandingContent = require('./LandingContent');
-const MoodLog = require('./MoodLog');
-const SessionRating = require('./SessionRating');
-const adminUsersRouter = require('./routes/adminUsers');
-const therapistRouter = require('./routes/therapistRoutes');
-const ClinicalNote = require('./ClinicalNote');
-const WellnessRecommendation = require('./WellnessRecommendation');
-const TherapistProfile = require('./TherapistProfile');
-const MatchingRequest  = require('./MatchingRequest');
+const rateLimit  = require('express-rate-limit');
+const express    = require('express');
+const cors       = require('cors');
+const bcrypt     = require('bcryptjs');
+const jwt        = require('jsonwebtoken');
+const crypto     = require('crypto');
+const Anthropic  = require('@anthropic-ai/sdk');
 
+const { connectDB, sequelize } = require('./database');
+const setupAssociations        = require('./associations');
+
+// ── Models used directly in endpoints ───────────────────────────────────────
+const User                   = require('./User');
+const Message                = require('./Message');
+const MoodLog                = require('./MoodLog');
+const SessionRating          = require('./SessionRating');
+const LandingContent         = require('./LandingContent');
+const ClinicalNote           = require('./ClinicalNote');
+const WellnessRecommendation = require('./WellnessRecommendation');
+const TherapistProfile       = require('./TherapistProfile');
+const MatchingRequest        = require('./MatchingRequest');
+
+const {
+  PromptVault, getActivePrompt, savePrompt,
+  proposePrompt, approvePrompt, rejectPrompt, rollbackPrompt,
+} = require('./promptVault');
+
+// ── Routers ──────────────────────────────────────────────────────────────────
+const adminUsersRouter = require('./routes/adminUsers');
+const therapistRouter  = require('./routes/therapistRoutes');
+const sessionsRouter   = require('./routes/sessions');
+
+// ── App ───────────────────────────────────────────────────────────────────────
 const app = express();
 
-const corsOptions = {
+app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  optionsSuccessStatus: 200
-};
-app.use(cors(corsOptions));
+  optionsSuccessStatus: 200,
+}));
 app.use(express.json());
 
-// HU-038 — Rate limiting en login (10 intentos por minuto por IP)
+// ── Rate limiting ─────────────────────────────────────────────────────────────
 const loginLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
@@ -40,9 +49,9 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// HU-038 — Delay para normalizar tiempo de respuesta (anti timing attacks)
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// ── Encryption ────────────────────────────────────────────────────────────────
 const ALGORITMO = 'aes-256-cbc';
 const KEY = Buffer.from(
   (process.env.DB_PASS || 'default_password_2026').padEnd(32).slice(0, 32)
@@ -66,40 +75,31 @@ const desencriptar = (texto) => {
     decrypted += decipher.final('utf8');
     return decrypted;
   } catch (error) {
-    console.error('⚠️ Error desencriptando mensaje:', error.message);
+    console.error('⚠️ Error desencriptando:', error.message);
     return texto;
   }
 };
 
+// ── Anthropic ─────────────────────────────────────────────────────────────────
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+// ── JWT ───────────────────────────────────────────────────────────────────────
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_dev_secret_2026';
 if (!process.env.JWT_SECRET) {
   console.warn('⚠️ JWT_SECRET no está configurado — usando valor de desarrollo');
 }
 
+// ── DB + Associations + Sync ──────────────────────────────────────────────────
 connectDB().then(() => {
-  User.hasMany(Message);
-  Message.belongsTo(User);
-  User.hasMany(MoodLog);
-  MoodLog.belongsTo(User);
-  User.hasMany(SessionRating);
-  SessionRating.belongsTo(User);
-  User.hasMany(ClinicalNote, { foreignKey: 'UserId' });
-  ClinicalNote.belongsTo(User, { foreignKey: 'UserId' });
-  User.hasMany(WellnessRecommendation, { foreignKey: 'UserId' });
-  WellnessRecommendation.belongsTo(User, { foreignKey: 'UserId' });
-  User.hasOne(TherapistProfile, { foreignKey: 'UserId' });
-  TherapistProfile.belongsTo(User, { foreignKey: 'UserId' });
-  User.hasMany(MatchingRequest, { foreignKey: 'UserId' });
-  MatchingRequest.belongsTo(User, { foreignKey: 'UserId' });
-  sequelize.sync({ alter: true })
-    .then(() => console.log('✅ Tablas sincronizadas en PostgreSQL.'))
-    .catch(err => console.error('❌ Error sincronizando tablas:', err));
+  // Dentro de connectDB().then(() => {
+setupAssociations(sequelize);
+sequelize.sync({ alter: true })
+  .then(() => console.log('✅ Tablas sincronizadas en PostgreSQL.'))
+  .catch(err => console.error('❌ Error sincronizando tablas:', err));
 });
 
 // ==========================================
-// 🛡️ RUTAS DE AUTENTICACIÓN
+// 🛡️ AUTH
 // ==========================================
 app.post('/api/register', async (req, res) => {
   try {
@@ -109,30 +109,27 @@ app.post('/api/register', async (req, res) => {
     const role = adminEmails.includes(email.toLowerCase()) ? 'admin' : 'user';
     const hashedPassword = await bcrypt.hash(password, 10);
     await User.create({ name, email, password: hashedPassword, role });
-    res.status(201).json({ message: "Usuario creado exitosamente. ¡Bienvenido a Elevation!" });
+    res.status(201).json({ message: 'Usuario creado exitosamente. ¡Bienvenido a Elevation!' });
   } catch (error) {
-    res.status(400).json({ error: "El correo ya está registrado o hubo un error." });
+    res.status(400).json({ error: 'El correo ya está registrado o hubo un error.' });
   }
 });
 
-// HU-024 + HU-038 — Login con bloqueo + mensaje genérico + rate limiting
 app.post('/api/login', loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     const user = await User.findOne({ where: { email } });
 
-    // HU-038: mensaje genérico — no revela si el email existe o no
     if (!user) {
       await delay(200);
       return res.status(401).json({ error: 'Credenciales incorrectas.' });
     }
 
-    // HU-024: bloqueo por cuenta
     if (user.lockedUntil && new Date() < new Date(user.lockedUntil)) {
       const minutosRestantes = Math.ceil((new Date(user.lockedUntil) - new Date()) / 60000);
       return res.status(423).json({
         error: `Cuenta bloqueada. Intentá de nuevo en ${minutosRestantes} minuto${minutosRestantes > 1 ? 's' : ''}.`,
-        locked: true
+        locked: true,
       });
     }
 
@@ -143,13 +140,9 @@ app.post('/api/login', loginLimiter, async (req, res) => {
       if (nuevosIntentos >= 3) {
         const bloqueadoHasta = new Date(Date.now() + 15 * 60 * 1000);
         await user.update({ loginAttempts: nuevosIntentos, lockedUntil: bloqueadoHasta });
-        return res.status(423).json({
-          error: 'Cuenta bloqueada por 15 minutos.',
-          locked: true
-        });
+        return res.status(423).json({ error: 'Cuenta bloqueada por 15 minutos.', locked: true });
       }
       await user.update({ loginAttempts: nuevosIntentos });
-      // HU-038: mensaje genérico — no dice "contraseña incorrecta"
       await delay(200);
       return res.status(401).json({ error: 'Credenciales incorrectas.' });
     }
@@ -161,7 +154,6 @@ app.post('/api/login', loginLimiter, async (req, res) => {
       { expiresIn: '8h' }
     );
     res.json({ message: 'Inicio de sesión exitoso', token, name: user.name, role: user.role });
-
   } catch (error) {
     console.error('❌ Error en login:', error);
     res.status(500).json({ error: 'Error en el servidor.' });
@@ -173,21 +165,20 @@ app.post('/api/login', loginLimiter, async (req, res) => {
 // ==========================================
 const verificarToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
-  if (!authHeader) return res.status(403).json({ error: "Acceso denegado. No tienes llave." });
+  if (!authHeader) return res.status(403).json({ error: 'Acceso denegado. No tienes llave.' });
   const token = authHeader.split(' ')[1];
   try {
-    const decodificado = jwt.verify(token, JWT_SECRET);
-    req.user = decodificado;
+    req.user = jwt.verify(token, JWT_SECRET);
     next();
-  } catch (error) {
-    return res.status(401).json({ error: "Llave inválida o expirada." });
+  } catch {
+    return res.status(401).json({ error: 'Llave inválida o expirada.' });
   }
 };
 
 const verificarAdmin = (req, res, next) => {
   verificarToken(req, res, () => {
     if (!['admin', 'superadmin'].includes(req.user.role)) {
-      return res.status(403).json({ error: "Acceso denegado. Solo administradores." });
+      return res.status(403).json({ error: 'Acceso denegado. Solo administradores.' });
     }
     next();
   });
@@ -196,41 +187,57 @@ const verificarAdmin = (req, res, next) => {
 const verificarSuperAdmin = (req, res, next) => {
   verificarToken(req, res, () => {
     if (req.user.role !== 'superadmin') {
-      return res.status(403).json({ error: "Acceso exclusivo para superadmin." });
+      return res.status(403).json({ error: 'Acceso exclusivo para superadmin.' });
     }
     next();
   });
 };
 
 // ==========================================
-// 🧠 RUTA DEL CHAT
+// 🧠 CHAT
 // ==========================================
 app.post('/api/chat', verificarToken, async (req, res) => {
   const mensajeUsuario = req.body.message;
   const userId = req.user.id;
   try {
-    // HU-049 — Use therapist prompt if user has an assigned therapist
     const user = await User.findByPk(userId, { attributes: ['therapistId'] });
 
     let systemPrompt = null;
-
     if (user?.therapistId) {
       systemPrompt = await getActivePrompt(`therapist_prompt_${user.therapistId}`);
     }
+    if (!systemPrompt) systemPrompt = await getActivePrompt('elevation_system_prompt');
+    if (!systemPrompt) systemPrompt = 'You are Elevation, an empathetic emotional wellness companion. You listen actively and ask reflective questions. Your responses are concise, warm and you never use emojis.';
 
-    // Fallback to general Elevation prompt
-    if (!systemPrompt) {
-      systemPrompt = await getActivePrompt('elevation_system_prompt');
-    }
+    const historialDB = await Message.findAll({
+      where: { UserId: userId },
+      order: [['createdAt', 'ASC']],
+      limit: 20,
+    });
 
-    // Final fallback hardcoded
-    if (!systemPrompt) {
-      systemPrompt = "You are Elevation, an empathetic emotional wellness companion. You listen actively and ask reflective questions. Your responses are concise, warm and you never use emojis.";
-    }
-  } 
-    catch (error) {
-    console.error("❌ Error de comunicación:", error);
-    res.status(500).json({ reply: "Lo siento, tuve una pequeña desconexión. ¿Podrías repetirme eso?" });
+    const historial = historialDB.map(m => ({
+      role: m.role === 'assistant' ? 'assistant' : 'user',
+      content: desencriptar(m.content),
+    }));
+
+    historial.push({ role: 'user', content: mensajeUsuario });
+
+    await Message.create({ role: 'user', content: encriptar(mensajeUsuario), UserId: userId });
+
+    const msg = await anthropic.messages.create({
+      model: 'claude-3-haiku-20240307',
+      max_tokens: 1000,
+      system: systemPrompt,
+      messages: historial,
+    });
+
+    const respuestaIA = msg.content[0].text;
+    await Message.create({ role: 'assistant', content: encriptar(respuestaIA), UserId: userId });
+
+    res.json({ reply: respuestaIA });
+  } catch (error) {
+    console.error('❌ Error de comunicación:', error);
+    res.status(500).json({ reply: 'Lo siento, tuve una pequeña desconexión. ¿Podrías repetirme eso?' });
   }
 });
 
@@ -241,62 +248,63 @@ app.get('/api/messages', verificarToken, async (req, res) => {
   try {
     const mensajes = await Message.findAll({
       where: { UserId: req.user.id },
-      order: [['createdAt', 'ASC']]
+      order: [['createdAt', 'ASC']],
     });
     const historial = mensajes.map(m => ({
       role: m.role === 'assistant' ? 'bot' : 'user',
-      text: desencriptar(m.content)
+      text: desencriptar(m.content),
     }));
     res.json(historial);
   } catch (error) {
-    console.error("❌ Error obteniendo historial:", error);
-    res.status(500).json({ error: "No se pudo cargar el historial." });
+    console.error('❌ Error obteniendo historial:', error);
+    res.status(500).json({ error: 'No se pudo cargar el historial.' });
   }
 });
 
+// ==========================================
+// 🔐 ROUTERS
+// ==========================================
 app.use('/api/admin/usuarios', verificarAdmin, adminUsersRouter);
-
-// HU-046 — Therapist Routes
-app.use('/api/therapist', verificarToken, therapistRouter);
+app.use('/api/sessions', verificarToken, require('./routes/sessions'));
+app.use('/api/therapist',      verificarToken, therapistRouter);
 
 // ==========================================
-// 🔐 RUTAS DEL BACKOFFICE
+// 🔐 BACKOFFICE — PROMPTS
 // ==========================================
 app.post('/api/admin/prompt', verificarAdmin, async (req, res) => {
   try {
     const { key, content } = req.body;
-    if (!key || !content) return res.status(400).json({ error: "key y content son requeridos." });
+    if (!key || !content) return res.status(400).json({ error: 'key y content son requeridos.' });
     await savePrompt(key, content, req.user.name);
     res.json({ message: `Prompt '${key}' guardado y encriptado exitosamente.` });
   } catch (error) {
-    console.error("❌ Error guardando prompt:", error);
-    res.status(500).json({ error: "No se pudo guardar el prompt." });
+    console.error('❌ Error guardando prompt:', error);
+    res.status(500).json({ error: 'No se pudo guardar el prompt.' });
   }
 });
 
 app.get('/api/admin/prompts', verificarAdmin, async (req, res) => {
   try {
     const prompts = await PromptVault.findAll({
-      attributes: ['key', 'version', 'isActive', 'updatedBy', 'updatedAt']
+      attributes: ['key', 'version', 'isActive', 'updatedBy', 'updatedAt'],
     });
     res.json(prompts);
   } catch (error) {
-    res.status(500).json({ error: "No se pudieron obtener los prompts." });
+    res.status(500).json({ error: 'No se pudieron obtener los prompts.' });
   }
 });
 
-// HU-033 — GET prompt activo con fallback isActive
 app.get('/api/admin/prompt/:key', verificarAdmin, async (req, res) => {
   try {
     let prompt = await PromptVault.findOne({
       where: { key: req.params.key, status: 'active' },
-      attributes: ['id', 'key', 'version', 'status', 'approved_by', 'approved_at', 'updatedAt']
+      attributes: ['id', 'key', 'version', 'status', 'approved_by', 'approved_at', 'updatedAt'],
     });
     if (!prompt) {
       prompt = await PromptVault.findOne({
         where: { key: req.params.key, isActive: true },
         attributes: ['id', 'key', 'version', 'status', 'approved_by', 'approved_at', 'updatedAt'],
-        order: [['version', 'DESC']]
+        order: [['version', 'DESC']],
       });
     }
     if (!prompt) return res.status(404).json({ error: 'Prompt no encontrado.' });
@@ -308,7 +316,6 @@ app.get('/api/admin/prompt/:key', verificarAdmin, async (req, res) => {
   }
 });
 
-// HU-033 — POST proponer nueva versión
 app.post('/api/admin/prompt/propose', verificarAdmin, async (req, res) => {
   try {
     const { key, content } = req.body;
@@ -321,13 +328,12 @@ app.post('/api/admin/prompt/propose', verificarAdmin, async (req, res) => {
   }
 });
 
-// HU-033 — GET historial de versiones
 app.get('/api/superadmin/prompt/:key/versions', verificarSuperAdmin, async (req, res) => {
   try {
     const versiones = await PromptVault.findAll({
       where: { key: req.params.key },
       attributes: ['id', 'key', 'version', 'status', 'proposed_by', 'approved_by', 'rejected_by', 'rejection_note', 'approved_at', 'rejected_at', 'updatedAt'],
-      order: [['version', 'DESC']]
+      order: [['version', 'DESC']],
     });
     res.json(versiones);
   } catch (error) {
@@ -335,7 +341,6 @@ app.get('/api/superadmin/prompt/:key/versions', verificarSuperAdmin, async (req,
   }
 });
 
-// HU-033 — POST aprobar versión
 app.post('/api/superadmin/prompt/:id/approve', verificarSuperAdmin, async (req, res) => {
   try {
     await approvePrompt(req.params.id, req.user.name);
@@ -346,7 +351,6 @@ app.post('/api/superadmin/prompt/:id/approve', verificarSuperAdmin, async (req, 
   }
 });
 
-// HU-033 — POST rechazar versión
 app.post('/api/superadmin/prompt/:id/reject', verificarSuperAdmin, async (req, res) => {
   try {
     const { note } = req.body;
@@ -358,7 +362,6 @@ app.post('/api/superadmin/prompt/:id/reject', verificarSuperAdmin, async (req, r
   }
 });
 
-// HU-033 — POST rollback
 app.post('/api/superadmin/prompt/:id/rollback', verificarSuperAdmin, async (req, res) => {
   try {
     await rollbackPrompt(req.params.id, req.user.name);
@@ -370,10 +373,8 @@ app.post('/api/superadmin/prompt/:id/rollback', verificarSuperAdmin, async (req,
 });
 
 // ==========================================
-// 🌐 HU-039 — CONTENIDO LANDING
+// 🌐 LANDING CONTENT
 // ==========================================
-
-// Textos por defecto si la BD está vacía
 const LANDING_DEFAULTS = {
   es: {
     hero_title:         'Encuentra tu calma interior',
@@ -391,44 +392,26 @@ const LANDING_DEFAULTS = {
   },
 };
 
-// GET /api/landing-content?lang=es — público, sin auth
 app.get('/api/landing-content', async (req, res) => {
   try {
     const lang = req.query.lang === 'en' ? 'en' : 'es';
     const registros = await LandingContent.findAll({ where: { lang } });
-
-    // Empezamos con los defaults y sobreescribimos con lo que haya en BD
     const content = { ...LANDING_DEFAULTS[lang] };
     registros.forEach(r => { content[r.key] = r.value; });
-
     res.json(content);
   } catch (error) {
     console.error('❌ Error obteniendo contenido landing:', error);
-    // Si falla la BD, retornamos los defaults sin romper
     const lang = req.query.lang === 'en' ? 'en' : 'es';
     res.json(LANDING_DEFAULTS[lang]);
   }
 });
 
-// PUT /api/landing-content — solo superadmin
 app.put('/api/landing-content', verificarSuperAdmin, async (req, res) => {
   try {
     const { key, lang, value } = req.body;
-    if (!key || !lang || !value) {
-      return res.status(400).json({ error: 'key, lang y value son requeridos.' });
-    }
-    if (!['es', 'en'].includes(lang)) {
-      return res.status(400).json({ error: 'lang debe ser es o en.' });
-    }
-
-    // upsert — crea o actualiza
-    await LandingContent.upsert({
-      key,
-      lang,
-      value,
-      updated_by: req.user.name,
-    });
-
+    if (!key || !lang || !value) return res.status(400).json({ error: 'key, lang y value son requeridos.' });
+    if (!['es', 'en'].includes(lang)) return res.status(400).json({ error: 'lang debe ser es o en.' });
+    await LandingContent.upsert({ key, lang, value, updated_by: req.user.name });
     res.json({ message: `Contenido '${key}' (${lang}) actualizado correctamente.` });
   } catch (error) {
     console.error('❌ Error actualizando contenido landing:', error);
@@ -437,23 +420,13 @@ app.put('/api/landing-content', verificarSuperAdmin, async (req, res) => {
 });
 
 // ==========================================
-// 😊 HU-021 — MOOD LOGS (Check-in / Check-out)
+// 😊 MOOD LOGS
 // ==========================================
-
-// POST /api/mood/checkin — guarda el estado de ánimo al iniciar
 app.post('/api/mood/checkin', verificarToken, async (req, res) => {
   try {
     const { mood } = req.body;
     const today = new Date().toISOString().split('T')[0];
-    const userId = req.user.id;
-
-    // upsert — si ya existe el registro del día, actualiza solo el checkin
-    const [log] = await MoodLog.upsert({
-      UserId: userId,
-      date: today,
-      checkin_mood: mood,
-    });
-
+    const [log] = await MoodLog.upsert({ UserId: req.user.id, date: today, checkin_mood: mood });
     res.json({ message: 'Check-in registrado.', log });
   } catch (error) {
     console.error('❌ Error en mood checkin:', error);
@@ -461,20 +434,11 @@ app.post('/api/mood/checkin', verificarToken, async (req, res) => {
   }
 });
 
-// POST /api/mood/checkout — actualiza el estado de ánimo al finalizar
 app.post('/api/mood/checkout', verificarToken, async (req, res) => {
   try {
     const { mood } = req.body;
     const today = new Date().toISOString().split('T')[0];
-    const userId = req.user.id;
-
-    // busca el registro del día y actualiza solo el checkout
-    const [log, created] = await MoodLog.upsert({
-      UserId: userId,
-      date: today,
-      checkout_mood: mood,
-    });
-
+    const [log] = await MoodLog.upsert({ UserId: req.user.id, date: today, checkout_mood: mood });
     res.json({ message: 'Check-out registrado.', log });
   } catch (error) {
     console.error('❌ Error en mood checkout:', error);
@@ -482,7 +446,6 @@ app.post('/api/mood/checkout', verificarToken, async (req, res) => {
   }
 });
 
-// GET /api/mood/history — historial de los últimos 30 días
 app.get('/api/mood/history', verificarToken, async (req, res) => {
   try {
     const logs = await MoodLog.findAll({
@@ -498,22 +461,14 @@ app.get('/api/mood/history', verificarToken, async (req, res) => {
 });
 
 // ==========================================
-// ⭐ HU-022 — CALIFICACIÓN CON ESTRELLAS
+// ⭐ RATINGS
 // ==========================================
-
-// POST /api/rating — guarda calificación de la sesión
 app.post('/api/rating', verificarToken, async (req, res) => {
   try {
     const { rating } = req.body;
-    if (!rating || rating < 1 || rating > 5) {
-      return res.status(400).json({ error: 'Rating debe ser entre 1 y 5.' });
-    }
+    if (!rating || rating < 1 || rating > 5) return res.status(400).json({ error: 'Rating debe ser entre 1 y 5.' });
     const today = new Date().toISOString().split('T')[0];
-    await SessionRating.create({
-      UserId: req.user.id,
-      rating,
-      date: today,
-    });
+    await SessionRating.create({ UserId: req.user.id, rating, date: today });
     res.json({ message: 'Calificación guardada.' });
   } catch (error) {
     console.error('❌ Error guardando rating:', error);
@@ -521,15 +476,10 @@ app.post('/api/rating', verificarToken, async (req, res) => {
   }
 });
 
-// GET /api/rating/avg — promedio de calificaciones (solo admin/superadmin)
 app.get('/api/rating/avg', verificarAdmin, async (req, res) => {
   try {
-    const ratings = await SessionRating.findAll({
-      attributes: ['rating'],
-    });
-    if (ratings.length === 0) {
-      return res.json({ avg: 0, total: 0 });
-    }
+    const ratings = await SessionRating.findAll({ attributes: ['rating'] });
+    if (ratings.length === 0) return res.json({ avg: 0, total: 0 });
     const sum = ratings.reduce((acc, r) => acc + r.rating, 0);
     const avg = Math.round((sum / ratings.length) * 10) / 10;
     res.json({ avg, total: ratings.length });
@@ -540,21 +490,11 @@ app.get('/api/rating/avg', verificarAdmin, async (req, res) => {
 });
 
 // ==========================================
-// ✨ HU-051 — WELLNESS RECOMMENDATIONS
+// ✨ WELLNESS RECOMMENDATIONS
 // ==========================================
-
-const CATEGORY_EMOJI = {
-  mindfulness: '🧘',
-  habit:       '🌿',
-  reflection:  '📓',
-  resource:    '📚',
-};
-
-// POST /api/recommendations/generate
 app.post('/api/recommendations/generate', verificarToken, async (req, res) => {
   try {
     const userId = req.user.id;
-
     const moodLogs = await MoodLog.findAll({
       where: { UserId: userId },
       order: [['date', 'DESC']],
@@ -562,9 +502,7 @@ app.post('/api/recommendations/generate', verificarToken, async (req, res) => {
     });
 
     const avgMood = moodLogs.length > 0
-      ? (moodLogs
-          .flatMap(m => [m.checkin_mood, m.checkout_mood])
-          .filter(Boolean)
+      ? (moodLogs.flatMap(m => [m.checkin_mood, m.checkout_mood]).filter(Boolean)
           .reduce((a, b) => a + b, 0) / moodLogs.length).toFixed(1)
       : null;
 
@@ -574,19 +512,16 @@ app.post('/api/recommendations/generate', verificarToken, async (req, res) => {
       : 'stable';
 
     const prompt = `You are a wellness coach for Elevation, a mental health platform.
-
 Based on this user's recent emotional data:
 - Sessions in last 7 days: ${moodLogs.length}
 - Average mood (1-5 scale): ${avgMood ?? 'No data yet'}
 - Recent trend: ${trend}
-
 Generate exactly 3 personalized wellness recommendations. Respond ONLY with a valid JSON array, no markdown, no extra text:
 [
   { "category": "mindfulness", "content": "..." },
   { "category": "habit", "content": "..." },
   { "category": "reflection", "content": "..." }
 ]
-
 Categories must be one of: mindfulness, habit, reflection, resource.
 Each content must be 1-2 sentences, warm, actionable and specific to the user's emotional state.
 Never mention diagnoses or medical advice.`;
@@ -605,7 +540,6 @@ Never mention diagnoses or medical advice.`;
       return res.status(500).json({ error: 'Could not parse recommendations.' });
     }
 
-    // Save encrypted to DB
     const saved = await Promise.all(
       recommendations.map(r =>
         WellnessRecommendation.create({
@@ -617,7 +551,6 @@ Never mention diagnoses or medical advice.`;
       )
     );
 
-    // Return decrypted to client
     res.json(saved.map((r, i) => ({
       id: r.id,
       category: r.category,
@@ -625,14 +558,12 @@ Never mention diagnoses or medical advice.`;
       generatedAt: r.generatedAt,
       seenByUser: r.seenByUser,
     })));
-
   } catch (error) {
     console.error('❌ Error generating recommendations:', error);
     res.status(500).json({ error: 'Could not generate recommendations.' });
   }
 });
 
-// GET /api/recommendations
 app.get('/api/recommendations', verificarToken, async (req, res) => {
   try {
     const recs = await WellnessRecommendation.findAll({
@@ -640,7 +571,6 @@ app.get('/api/recommendations', verificarToken, async (req, res) => {
       order: [['generatedAt', 'DESC']],
       limit: 9,
     });
-
     res.json(recs.map(r => ({
       id: r.id,
       category: r.category,
@@ -654,7 +584,6 @@ app.get('/api/recommendations', verificarToken, async (req, res) => {
   }
 });
 
-// PUT /api/recommendations/:id/seen
 app.put('/api/recommendations/:id/seen', verificarToken, async (req, res) => {
   try {
     const rec = await WellnessRecommendation.findOne({
@@ -669,46 +598,24 @@ app.put('/api/recommendations/:id/seen', verificarToken, async (req, res) => {
 });
 
 // ==========================================
-// 📊 HU-052 — USER PROGRESS
+// 📊 USER PROGRESS
 // ==========================================
 app.get('/api/user/progress', verificarToken, async (req, res) => {
   try {
     const userId = req.user.id;
-
-    const moodLogs = await MoodLog.findAll({
-      where: { UserId: userId },
-      order: [['date', 'DESC']],
-      limit: 30,
-    });
-
-    const ratings = await SessionRating.findAll({
-      where: { UserId: userId },
-      order: [['date', 'DESC']],
-      limit: 30,
-    });
-
+    const moodLogs = await MoodLog.findAll({ where: { UserId: userId }, order: [['date', 'DESC']], limit: 30 });
+    const ratings  = await SessionRating.findAll({ where: { UserId: userId }, order: [['date', 'DESC']], limit: 30 });
     const recommendations = await WellnessRecommendation.findAll({
-      where: { UserId: userId },
-      order: [['generatedAt', 'DESC']],
-      limit: 5,
+      where: { UserId: userId }, order: [['generatedAt', 'DESC']], limit: 5,
     });
 
-    // Calculate stats
-    const allMoods = moodLogs
-      .flatMap(m => [m.checkin_mood, m.checkout_mood])
-      .filter(Boolean);
-
-    const avgMood = allMoods.length > 0
-      ? Math.round((allMoods.reduce((a, b) => a + b, 0) / allMoods.length) * 10) / 10
-      : null;
-
+    const allMoods = moodLogs.flatMap(m => [m.checkin_mood, m.checkout_mood]).filter(Boolean);
+    const avgMood  = allMoods.length > 0
+      ? Math.round((allMoods.reduce((a, b) => a + b, 0) / allMoods.length) * 10) / 10 : null;
     const avgRating = ratings.length > 0
-      ? Math.round((ratings.reduce((a, r) => a + r.rating, 0) / ratings.length) * 10) / 10
-      : null;
+      ? Math.round((ratings.reduce((a, r) => a + r.rating, 0) / ratings.length) * 10) / 10 : null;
 
-    // Calculate streak (consecutive days with check-in)
     let streak = 0;
-    const today = new Date().toISOString().split('T')[0];
     const logDates = [...new Set(moodLogs.map(m => m.date))].sort().reverse();
     for (let i = 0; i < logDates.length; i++) {
       const expected = new Date(Date.now() - i * 86400000).toISOString().split('T')[0];
@@ -717,20 +624,13 @@ app.get('/api/user/progress', verificarToken, async (req, res) => {
     }
 
     res.json({
-      stats: {
-        totalSessions: moodLogs.length,
-        avgMood,
-        avgRating,
-        streak,
-      },
+      stats: { totalSessions: moodLogs.length, avgMood, avgRating, streak },
       moodLogs,
       ratings,
       recommendations: recommendations.map(r => ({
-        id: r.id,
-        category: r.category,
+        id: r.id, category: r.category,
         content: desencriptar(r.content),
-        generatedAt: r.generatedAt,
-        seenByUser: r.seenByUser,
+        generatedAt: r.generatedAt, seenByUser: r.seenByUser,
       })),
     });
   } catch (error) {
@@ -740,37 +640,31 @@ app.get('/api/user/progress', verificarToken, async (req, res) => {
 });
 
 // ==========================================
-// 📊 HU-047 — ADMIN METRICS DASHBOARD
+// 📊 ADMIN METRICS
 // ==========================================
 app.get('/api/admin/metrics', verificarAdmin, async (req, res) => {
   try {
     const { Op } = require('sequelize');
-
-    const totalUsers = await User.count({ where: { role: 'user' } });
-    const activeUsers = await User.count({ where: { role: 'user', active: true } });
+    const totalUsers     = await User.count({ where: { role: 'user' } });
+    const activeUsers    = await User.count({ where: { role: 'user', active: true } });
     const totalTherapists = await User.count({ where: { role: 'therapist', active: true } });
-    const totalSessions = await MoodLog.count();
+    const totalSessions  = await MoodLog.count();
 
-    const allMoods = await MoodLog.findAll({ attributes: ['checkin_mood', 'checkout_mood'] });
+    const allMoods   = await MoodLog.findAll({ attributes: ['checkin_mood', 'checkout_mood'] });
     const moodValues = allMoods.flatMap(m => [m.checkin_mood, m.checkout_mood]).filter(Boolean);
-    const avgMood = moodValues.length > 0
-      ? Math.round((moodValues.reduce((a, b) => a + b, 0) / moodValues.length) * 10) / 10
-      : null;
+    const avgMood    = moodValues.length > 0
+      ? Math.round((moodValues.reduce((a, b) => a + b, 0) / moodValues.length) * 10) / 10 : null;
 
     const allRatings = await SessionRating.findAll({ attributes: ['rating'] });
-    const avgRating = allRatings.length > 0
-      ? Math.round((allRatings.reduce((a, r) => a + r.rating, 0) / allRatings.length) * 10) / 10
-      : null;
+    const avgRating  = allRatings.length > 0
+      ? Math.round((allRatings.reduce((a, r) => a + r.rating, 0) / allRatings.length) * 10) / 10 : null;
 
-    // Active this week
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const activeThisWeek = await MoodLog.count({
       where: { date: { [Op.gte]: weekAgo.toISOString().split('T')[0] } },
-      distinct: true,
-      col: 'UserId',
+      distinct: true, col: 'UserId',
     });
 
-    // Sessions by day (last 30 days)
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const sessionsByDay = await MoodLog.findAll({
       where: { date: { [Op.gte]: thirtyDaysAgo.toISOString().split('T')[0] } },
@@ -779,40 +673,26 @@ app.get('/api/admin/metrics', verificarAdmin, async (req, res) => {
       order: [['date', 'ASC']],
     });
 
-    // Top therapists by patient count
     const therapists = await User.findAll({
       where: { role: 'therapist', active: true },
       attributes: ['id', 'name', 'email'],
     });
 
-    const topTherapists = await Promise.all(
-      therapists.map(async (th) => {
-        const patientCount = await User.count({ where: { therapistId: th.id, role: 'user' } });
-        const patientIds = await User.findAll({
-          where: { therapistId: th.id, role: 'user' },
-          attributes: ['id'],
-        });
-        const ids = patientIds.map(p => p.id);
-        const ratings = ids.length > 0
-          ? await SessionRating.findAll({ where: { UserId: ids }, attributes: ['rating'] })
-          : [];
-        const avgThRating = ratings.length > 0
-          ? Math.round((ratings.reduce((a, r) => a + r.rating, 0) / ratings.length) * 10) / 10
-          : null;
-        return { id: th.id, name: th.name, patientCount, avgRating: avgThRating };
-      })
-    );
+    const topTherapists = await Promise.all(therapists.map(async (th) => {
+      const patientCount = await User.count({ where: { therapistId: th.id, role: 'user' } });
+      const patientIds   = await User.findAll({ where: { therapistId: th.id, role: 'user' }, attributes: ['id'] });
+      const ids          = patientIds.map(p => p.id);
+      const ratings      = ids.length > 0
+        ? await SessionRating.findAll({ where: { UserId: ids }, attributes: ['rating'] }) : [];
+      const avgThRating  = ratings.length > 0
+        ? Math.round((ratings.reduce((a, r) => a + r.rating, 0) / ratings.length) * 10) / 10 : null;
+      return { id: th.id, name: th.name, patientCount, avgRating: avgThRating };
+    }));
 
     topTherapists.sort((a, b) => b.patientCount - a.patientCount);
 
     res.json({
-      totalUsers,
-      activeUsers,
-      totalTherapists,
-      totalSessions,
-      avgMood,
-      avgRating,
-      activeThisWeek,
+      totalUsers, activeUsers, totalTherapists, totalSessions, avgMood, avgRating, activeThisWeek,
       sessionsByDay: sessionsByDay.map(s => ({ date: s.date, count: parseInt(s.dataValues.count) })),
       topTherapists: topTherapists.slice(0, 5),
     });
@@ -823,24 +703,19 @@ app.get('/api/admin/metrics', verificarAdmin, async (req, res) => {
 });
 
 // ==========================================
-// 🤝 HU-060 — MATCHING USUARIO-TERAPEUTA
+// 🤝 MATCHING
 // ==========================================
-
-// GET /api/therapist/profile — terapeuta ve/edita su perfil
 app.get('/api/therapist/profile', verificarToken, async (req, res) => {
   try {
     if (req.user.role !== 'therapist') return res.status(403).json({ error: 'Therapists only.' });
     let profile = await TherapistProfile.findOne({ where: { UserId: req.user.id } });
-    if (!profile) {
-      profile = await TherapistProfile.create({ UserId: req.user.id });
-    }
+    if (!profile) profile = await TherapistProfile.create({ UserId: req.user.id });
     res.json(profile);
   } catch (error) {
     res.status(500).json({ error: 'Could not fetch profile.' });
   }
 });
 
-// PUT /api/therapist/profile — terapeuta actualiza su perfil
 app.put('/api/therapist/profile', verificarToken, async (req, res) => {
   try {
     if (req.user.role !== 'therapist') return res.status(403).json({ error: 'Therapists only.' });
@@ -854,15 +729,12 @@ app.put('/api/therapist/profile', verificarToken, async (req, res) => {
   }
 });
 
-// POST /api/matching/request — usuario envía cuestionario y recibe sugerencias IA
 app.post('/api/matching/request', verificarToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const { answers } = req.body;
-
     if (!answers) return res.status(400).json({ error: 'Answers are required.' });
 
-    // Get available therapists with profiles
     const therapists = await User.findAll({
       where: { role: 'therapist', active: true },
       attributes: ['id', 'name'],
@@ -877,47 +749,32 @@ app.post('/api/matching/request', verificarToken, async (req, res) => {
       return res.status(404).json({ error: 'No therapists available at this time.' });
     }
 
-    // Get user mood context
-    const moodLogs = await MoodLog.findAll({
-      where: { UserId: userId },
-      order: [['date', 'DESC']],
-      limit: 14,
-    });
-
-    const avgMood = moodLogs.length > 0
-      ? (moodLogs.flatMap(m => [m.checkin_mood, m.checkout_mood])
-          .filter(Boolean)
+    const moodLogs = await MoodLog.findAll({ where: { UserId: userId }, order: [['date', 'DESC']], limit: 14 });
+    const avgMood  = moodLogs.length > 0
+      ? (moodLogs.flatMap(m => [m.checkin_mood, m.checkout_mood]).filter(Boolean)
           .reduce((a, b) => a + b, 0) / moodLogs.length).toFixed(1)
       : 'No data';
 
     const therapistList = availableTherapists.map(t => ({
-      id: t.id,
-      name: t.name,
+      id: t.id, name: t.name,
       specialties: t.TherapistProfile?.specialties ?? [],
-      approach: t.TherapistProfile?.approach ?? 'General wellness',
-      languages: t.TherapistProfile?.languages ?? ['es'],
-      bio: t.TherapistProfile?.bio ?? '',
+      approach:    t.TherapistProfile?.approach    ?? 'General wellness',
+      languages:   t.TherapistProfile?.languages   ?? ['es'],
+      bio:         t.TherapistProfile?.bio          ?? '',
     }));
 
     const prompt = `You are a matching assistant for Elevation, a mental health platform.
-
 User questionnaire answers:
 - Main area to work on: ${answers.area ?? 'Not specified'}
 - Preferred style: ${answers.style ?? 'Not specified'}
 - Preferred language: ${answers.language ?? 'Spanish'}
-
 User emotional context:
 - Average mood (1-5): ${avgMood}
 - Recent sessions: ${moodLogs.length}
-
 Available therapists:
 ${therapistList.map(t => `ID: ${t.id} | Name: ${t.name} | Specialties: ${t.specialties.join(', ')} | Approach: ${t.approach} | Languages: ${t.languages.join(', ')}`).join('\n')}
-
 Return ONLY a valid JSON array with the top 3 matches (or fewer if less available). No markdown, no extra text:
-[
-  { "therapistId": <id>, "score": <1-10>, "reason": "<one sentence why this therapist fits>" },
-  ...
-]`;
+[{ "therapistId": <id>, "score": <1-10>, "reason": "<one sentence why this therapist fits>" }]`;
 
     const msg = await anthropic.messages.create({
       model: 'claude-3-haiku-20240307',
@@ -933,34 +790,25 @@ Return ONLY a valid JSON array with the top 3 matches (or fewer if less availabl
       return res.status(500).json({ error: 'Could not parse suggestions.' });
     }
 
-    // Save matching request
-    const request = await MatchingRequest.create({
-      UserId: userId,
-      answers,
-      suggestions,
-      status: 'pending',
+    const request = await MatchingRequest.create({ UserId: userId, answers, suggestions, status: 'pending' });
+
+    res.json({
+      requestId: request.id,
+      suggestions: suggestions.map(s => ({
+        ...s,
+        therapistName: therapistList.find(t => t.id === s.therapistId)?.name ?? 'Unknown',
+      })),
     });
-
-    // Add therapist names to suggestions for frontend
-    const suggestionsWithNames = suggestions.map(s => ({
-      ...s,
-      therapistName: therapistList.find(t => t.id === s.therapistId)?.name ?? 'Unknown',
-    }));
-
-    res.json({ requestId: request.id, suggestions: suggestionsWithNames });
   } catch (error) {
     console.error('❌ Error in matching:', error);
     res.status(500).json({ error: 'Could not process matching request.' });
   }
 });
 
-// POST /api/matching/choose — usuario elige terapeuta
 app.post('/api/matching/choose', verificarToken, async (req, res) => {
   try {
     const { requestId, therapistId } = req.body;
-    const request = await MatchingRequest.findOne({
-      where: { id: requestId, UserId: req.user.id },
-    });
+    const request = await MatchingRequest.findOne({ where: { id: requestId, UserId: req.user.id } });
     if (!request) return res.status(404).json({ error: 'Request not found.' });
     await request.update({ chosenTherapistId: therapistId, status: 'pending' });
     res.json({ message: 'Therapist chosen. Waiting for admin confirmation.' });
@@ -969,47 +817,31 @@ app.post('/api/matching/choose', verificarToken, async (req, res) => {
   }
 });
 
-// GET /api/admin/matching/pending — admin ve solicitudes pendientes
 app.get('/api/admin/matching/pending', verificarAdmin, async (req, res) => {
   try {
+    const { Op } = require('sequelize');
     const requests = await MatchingRequest.findAll({
-      where: { status: 'pending', chosenTherapistId: { [require('sequelize').Op.ne]: null } },
+      where: { status: 'pending', chosenTherapistId: { [Op.ne]: null } },
       order: [['createdAt', 'DESC']],
     });
-
     const enriched = await Promise.all(requests.map(async r => {
-      const user = await User.findByPk(r.UserId, { attributes: ['id', 'name', 'email'] });
+      const user      = await User.findByPk(r.UserId,            { attributes: ['id', 'name', 'email'] });
       const therapist = await User.findByPk(r.chosenTherapistId, { attributes: ['id', 'name'] });
-      return {
-        id: r.id,
-        user: user?.toJSON(),
-        chosenTherapist: therapist?.toJSON(),
-        answers: r.answers,
-        createdAt: r.createdAt,
-      };
+      return { id: r.id, user: user?.toJSON(), chosenTherapist: therapist?.toJSON(), answers: r.answers, createdAt: r.createdAt };
     }));
-
     res.json(enriched);
   } catch (error) {
     res.status(500).json({ error: 'Could not fetch pending requests.' });
   }
 });
 
-// POST /api/admin/matching/:id/confirm — admin confirma asignación
 app.post('/api/admin/matching/:id/confirm', verificarAdmin, async (req, res) => {
   try {
     const request = await MatchingRequest.findByPk(req.params.id);
     if (!request) return res.status(404).json({ error: 'Request not found.' });
     if (!request.chosenTherapistId) return res.status(400).json({ error: 'No therapist chosen yet.' });
-
-    // Assign therapist to user
-    await User.update(
-      { therapistId: request.chosenTherapistId },
-      { where: { id: request.UserId } }
-    );
-
+    await User.update({ therapistId: request.chosenTherapistId }, { where: { id: request.UserId } });
     await request.update({ status: 'confirmed' });
-
     res.json({ message: 'Therapist assigned successfully.' });
   } catch (error) {
     res.status(500).json({ error: 'Could not confirm assignment.' });
@@ -1034,6 +866,6 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 });
 
 server.keepAliveTimeout = 65000;
-server.headersTimeout = 66000;
+server.headersTimeout   = 66000;
 
 module.exports = app;

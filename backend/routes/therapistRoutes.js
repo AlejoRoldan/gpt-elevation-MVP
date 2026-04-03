@@ -7,12 +7,11 @@ const MoodLog = require('../MoodLog');
 const SessionRating = require('../SessionRating');
 const ClinicalNote = require('../ClinicalNote');
 const Anthropic = require('@anthropic-ai/sdk');
+
 const {
   PromptVault,
   getActivePrompt,
   proposePrompt,
-  encryptar,
-  desencriptar,
 } = require('../promptVault');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
