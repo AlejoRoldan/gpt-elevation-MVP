@@ -1,7 +1,8 @@
 // frontend/src/pages/admin/AdminDashboard.tsx
-// HU-047 — Executive metrics dashboard
+// HU-047 — Executive metrics dashboard | DT-002 — i18n
 
 import { useState, useEffect } from 'react'
+import { useLanguage } from '../../i18n/useLanguage'
 
 const API = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080'
 const getToken = () => localStorage.getItem('elevation_token') || ''
@@ -23,6 +24,7 @@ const MOOD_EMOJI: Record<number, string> = {
 }
 
 export function AdminDashboard() {
+  const { t } = useLanguage()
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState('')
@@ -65,29 +67,29 @@ export function AdminDashboard() {
       {/* HEADER */}
       <div style={{ marginBottom: '2rem' }}>
         <h1 style={{ fontFamily: 'Playfair Display, serif', fontWeight: 300, fontSize: '1.8rem', color: '#1C1917', margin: 0 }}>
-          Dashboard
+          {t('admin_dashboard')}
         </h1>
         <p style={{ fontSize: '0.875rem', color: '#78716C', margin: '0.25rem 0 0' }}>
-          Platform overview
+          {t('admin_platform_overview')}
         </p>
       </div>
 
       {/* SUMMARY CARDS */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
         {[
-          { label: 'Total users',       value: metrics.totalUsers },
-          { label: 'Active users',      value: metrics.activeUsers },
-          { label: 'Therapists',        value: metrics.totalTherapists },
-          { label: 'Total sessions',    value: metrics.totalSessions },
-          { label: 'Active this week',  value: metrics.activeThisWeek },
+          { label: t('admin_total_users'),    value: metrics.totalUsers },
+          { label: t('admin_active_users'),   value: metrics.activeUsers },
+          { label: t('admin_therapists'),     value: metrics.totalTherapists },
+          { label: t('admin_total_sessions'), value: metrics.totalSessions },
+          { label: t('admin_active_week'),    value: metrics.activeThisWeek },
           {
-            label: 'Avg mood',
+            label: t('admin_avg_mood'),
             value: metrics.avgMood != null
               ? `${metrics.avgMood} ${MOOD_EMOJI[Math.round(metrics.avgMood)] ?? ''}`
               : '—',
           },
           {
-            label: 'Avg rating',
+            label: t('admin_avg_rating'),
             value: metrics.avgRating != null ? `${metrics.avgRating} ★` : '—',
           },
         ].map(card => (
@@ -101,7 +103,7 @@ export function AdminDashboard() {
       {/* ACTIVITY CHART */}
       <div style={{ ...cardStyle, marginBottom: '1.5rem' }}>
         <h2 style={{ fontFamily: 'Playfair Display, serif', fontWeight: 400, fontSize: '1.1rem', color: '#1C1917', margin: '0 0 1.25rem' }}>
-          Session activity — last 30 days
+          {t('admin_session_activity')}
         </h2>
         {metrics.sessionsByDay.length === 0 ? (
           <p style={{ color: '#78716C', fontSize: '0.875rem' }}>No session data yet.</p>
@@ -131,7 +133,7 @@ export function AdminDashboard() {
       {/* TOP THERAPISTS */}
       <div style={cardStyle}>
         <h2 style={{ fontFamily: 'Playfair Display, serif', fontWeight: 400, fontSize: '1.1rem', color: '#1C1917', margin: '0 0 1.25rem' }}>
-          Top therapists
+          {t('admin_top_therapists')}
         </h2>
         {metrics.topTherapists.length === 0 ? (
           <p style={{ color: '#78716C', fontSize: '0.875rem' }}>No therapists yet.</p>
@@ -139,7 +141,7 @@ export function AdminDashboard() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                {['Therapist', 'Patients', 'Avg rating'].map(h => (
+                {[t('admin_therapists'), t('admin_patients'), t('admin_avg_rating')].map(h => (
                   <th key={h} style={{
                     padding: '0.5rem 0.75rem', textAlign: 'left',
                     fontSize: '0.72rem', fontWeight: 600, color: '#78716C',

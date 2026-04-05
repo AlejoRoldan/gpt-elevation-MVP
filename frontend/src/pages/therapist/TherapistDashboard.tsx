@@ -1,7 +1,8 @@
-// HU-046 + HU-049 — Therapist dashboard with patient list + prompt management
+// HU-046 + HU-049 — Therapist dashboard with patient list + prompt management | DT-002 — i18n
 
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useLanguage } from '../../i18n/useLanguage'
 
 const API = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080'
 const getToken = () => localStorage.getItem('elevation_token') || ''
@@ -54,6 +55,7 @@ const TREND_COLOR: Record<string, string> = {
 
 export function TherapistDashboard() {
   const navigate = useNavigate()
+  const { t } = useLanguage()
   const [patients, setPatients] = useState<Patient[]>([])
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState('')
@@ -171,20 +173,20 @@ export function TherapistDashboard() {
       {/* HEADER */}
       <div style={{ marginBottom: '2rem' }}>
         <h1 style={{ fontFamily: 'Playfair Display, serif', fontWeight: 300, fontSize: '1.8rem', color: '#1C1917', margin: 0 }}>
-          My Patients
+          {t('therapist_my_patients')}
         </h1>
         <p style={{ fontSize: '0.875rem', color: '#78716C', margin: '0.25rem 0 0' }}>
-          {patients.length} patient{patients.length !== 1 ? 's' : ''} assigned
+          {patients.length} {patients.length !== 1 ? t('therapist_my_patients').toLowerCase() : t('therapist_my_patients').toLowerCase()} {t('therapist_assigned').toLowerCase()}
         </p>
       </div>
 
       {/* SUMMARY CARDS */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
         {[
-          { label: 'Total patients',     value: patients.length },
-          { label: 'Active this week',   value: activeThisWeek },
-          { label: 'Avg mood',           value: avgMoodAll ?? '—' },
-          { label: 'Avg session rating', value: avgRatingAll ? `${avgRatingAll} ★` : '—' },
+          { label: t('therapist_my_patients'),  value: patients.length },
+          { label: t('therapist_active_week'),  value: activeThisWeek },
+          { label: t('therapist_avg_mood'),     value: avgMoodAll ?? '—' },
+          { label: t('therapist_avg_rating'),   value: avgRatingAll ? `${avgRatingAll} ★` : '—' },
         ].map(card => (
           <div key={card.label} style={cardStyle}>
             <div style={{ fontSize: '1.6rem', fontWeight: 600, color: '#1C1917' }}>{card.value}</div>
@@ -201,12 +203,12 @@ export function TherapistDashboard() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showPromptSection ? '1rem' : 0 }}>
             <div>
               <div style={{ fontSize: '0.72rem', fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                My Therapeutic Prompt
+                {t('therapist_prompt')}
               </div>
               <div style={{ fontSize: '0.82rem', color: '#1C1917', marginTop: '0.2rem' }}>
                 {promptData?.active
                   ? `Active v${promptData.active.version} — Approved ${formatDate(promptData.active.approved_at)}`
-                  : 'No active prompt yet'}
+                  : t('therapist_no_prompt')}
                 {promptData?.pending && (
                   <span style={{ marginLeft: '0.75rem', fontSize: '0.72rem', background: '#FEF3C7', color: '#92400E', padding: '0.15rem 0.5rem', borderRadius: '999px', fontWeight: 600 }}>
                     v{promptData.pending.version} pending review
@@ -219,14 +221,14 @@ export function TherapistDashboard() {
                 onClick={() => setShowPromptSection(!showPromptSection)}
                 style={{ padding: '0.45rem 0.85rem', background: 'transparent', border: '0.5px solid #E7E5E4', borderRadius: '0.65rem', fontSize: '0.78rem', color: '#78716C', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}
               >
-                {showPromptSection ? 'Hide' : 'View current'}
+                {showPromptSection ? 'Hide' : t('therapist_view_current')}
               </button>
               {!promptData?.pending && (
                 <button
                   onClick={() => { setShowProposeModal(true); setNewPromptContent(promptData?.content ?? '') }}
                   style={{ padding: '0.45rem 0.85rem', background: '#6B7D5C', border: 'none', borderRadius: '0.65rem', fontSize: '0.78rem', color: '#fff', cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontWeight: 500 }}
                 >
-                  {promptData?.hasPrompt ? 'Propose new version' : 'Create prompt'}
+                  {promptData?.hasPrompt ? 'Propose new version' : t('therapist_create_prompt')}
                 </button>
               )}
             </div>
@@ -237,7 +239,7 @@ export function TherapistDashboard() {
             <div style={{ marginTop: '1rem', padding: '1rem', background: '#F5F3EF', borderRadius: '0.65rem' }}>
               {promptData?.content
                 ? <p style={{ fontSize: '0.875rem', color: '#1C1917', lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap' }}>{promptData.content}</p>
-                : <p style={{ fontSize: '0.875rem', color: '#78716C', margin: 0, fontStyle: 'italic' }}>No active prompt. Create one to personalize how Elevation AI interacts with your patients.</p>
+                : <p style={{ fontSize: '0.875rem', color: '#78716C', margin: 0, fontStyle: 'italic' }}>{t('therapist_no_prompt')}. {t('therapist_create_prompt')}.</p>
               }
             </div>
           )}
@@ -253,7 +255,7 @@ export function TherapistDashboard() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           {patients.length === 0 ? (
             <div style={{ ...cardStyle, textAlign: 'center', padding: '3rem', color: '#78716C', fontSize: '0.875rem' }}>
-              No patients assigned yet.
+              {t('therapist_no_alerts')}
             </div>
           ) : (
             patients.map(p => {
@@ -261,6 +263,12 @@ export function TherapistDashboard() {
               const daysSince = p.lastMood
                 ? Math.floor((Date.now() - new Date(p.lastMood.date).getTime()) / (1000 * 60 * 60 * 24))
                 : null
+
+              const trendLabel: Record<string, string> = {
+                up:      t('therapist_improving'),
+                down:    t('therapist_declining'),
+                neutral: t('therapist_stable'),
+              }
 
               return (
                 <div key={p.id} style={{
@@ -279,7 +287,11 @@ export function TherapistDashboard() {
                     <div>
                       <div style={{ fontWeight: 500, color: '#1C1917', fontSize: '0.95rem' }}>{p.name}</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.2rem', flexWrap: 'wrap' }}>
-                        {lastMoodValue != null && <span style={{ fontSize: '0.85rem' }}>{MOOD_EMOJI[lastMoodValue] ?? '—'}</span>}
+                        {lastMoodValue != null && (
+                          <span style={{ fontSize: '0.9rem' }}>
+                            {MOOD_EMOJI[lastMoodValue]}
+                          </span>
+                        )}
                         {daysSince != null && (
                           <span style={{ fontSize: '0.75rem', color: '#78716C' }}>
                             {daysSince === 0 ? 'Today' : daysSince === 1 ? 'Yesterday' : `${daysSince} days ago`}
@@ -287,7 +299,7 @@ export function TherapistDashboard() {
                         )}
                         {p.moodTrend && (
                           <span style={{ fontSize: '0.75rem', fontWeight: 600, color: TREND_COLOR[p.moodTrend] }}>
-                            {TREND_ICON[p.moodTrend]} {p.moodTrend === 'up' ? 'improving' : p.moodTrend === 'down' ? 'declining' : 'stable'}
+                            {TREND_ICON[p.moodTrend]} {trendLabel[p.moodTrend]}
                           </span>
                         )}
                       </div>
@@ -295,7 +307,7 @@ export function TherapistDashboard() {
                   </div>
 
                   <div style={{ display: 'flex', gap: '1.5rem', fontSize: '0.82rem', color: '#78716C' }}>
-                    <span>{p.totalSessions} session{p.totalSessions !== 1 ? 's' : ''}</span>
+                    <span>{p.totalSessions} {t('therapist_sessions').toLowerCase()}</span>
                     {p.avgRating != null && <span>{'★'.repeat(Math.round(p.avgRating))}{'☆'.repeat(5 - Math.round(p.avgRating))} {p.avgRating}</span>}
                   </div>
 
@@ -308,7 +320,7 @@ export function TherapistDashboard() {
                       cursor: 'pointer', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap',
                     }}
                   >
-                    View history
+                    {t('therapist_view_history')}
                   </button>
                 </div>
               )
@@ -323,7 +335,7 @@ export function TherapistDashboard() {
           <div style={{ background: '#fff', borderRadius: '1rem', padding: '2rem', width: '100%', maxWidth: 560, boxShadow: '0 8px 32px rgba(26,28,27,0.12)', fontFamily: 'Inter, sans-serif' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
               <h2 style={{ fontFamily: 'Playfair Display, serif', fontWeight: 400, fontSize: '1.3rem', color: '#1C1917', margin: 0 }}>
-                {promptData?.hasPrompt ? 'Propose new prompt version' : 'Create therapeutic prompt'}
+                {promptData?.hasPrompt ? 'Propose new prompt version' : t('therapist_create_prompt')}
               </h2>
               <button onClick={() => { setShowProposeModal(false); setProposeError(''); setProposeSuccess('') }}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#78716C' }}>✕</button>

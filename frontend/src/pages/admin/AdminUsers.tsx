@@ -1,6 +1,7 @@
-// HU-045 + HU-060 — User management + matching requests
+// HU-045 + HU-060 — User management + matching requests | DT-002 — i18n
 
 import { useState, useEffect } from 'react';
+import { useLanguage } from '../../i18n/useLanguage';
 
 type Role = 'user' | 'therapist' | 'admin' | 'superadmin';
 
@@ -53,6 +54,7 @@ const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
 
 export function AdminUsers() {
+  const { t } = useLanguage()
   const [usuarios,           setUsuarios]           = useState<Usuario[]>([]);
   const [terapeutas,         setTerapeutas]         = useState<Terapeuta[]>([]);
   const [cargando,           setCargando]           = useState(true);
@@ -194,7 +196,7 @@ export function AdminUsers() {
       {/* HEADER */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 style={{ fontFamily: 'Playfair Display, serif', fontWeight: 300, fontSize: '1.8rem', color: '#1C1917', margin: 0 }}>Usuarios</h1>
+          <h1 style={{ fontFamily: 'Playfair Display, serif', fontWeight: 300, fontSize: '1.8rem', color: '#1C1917', margin: 0 }}>{t('admin_users')}</h1>
           <p style={{ fontSize: '0.875rem', color: '#78716C', margin: '0.25rem 0 0' }}>
             {usuarios.length} usuario{usuarios.length !== 1 ? 's' : ''} registrado{usuarios.length !== 1 ? 's' : ''}
           </p>
@@ -233,7 +235,7 @@ export function AdminUsers() {
           marginBottom: '1.5rem',
         }}>
           <h2 style={{ fontFamily: 'Playfair Display, serif', fontWeight: 400, fontSize: '1.1rem', color: '#1C1917', margin: '0 0 1rem' }}>
-            🤝 Pending matching requests
+            🤝 {t('admin_pending_prompts')}
           </h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {matchingRequests.map(req => (
@@ -392,7 +394,7 @@ export function AdminUsers() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(28,25,23,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div style={{ background: '#fff', borderRadius: '1rem', padding: '2rem', width: '100%', maxWidth: 420, boxShadow: '0 8px 32px rgba(26,28,27,0.12)', fontFamily: 'Inter, sans-serif' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <h2 style={{ fontFamily: 'Playfair Display, serif', fontWeight: 400, fontSize: '1.3rem', color: '#1C1917', margin: 0 }}>Crear usuario</h2>
+              <h2 style={{ fontFamily: 'Playfair Display, serif', fontWeight: 400, fontSize: '1.3rem', color: '#1C1917', margin: 0 }}>{t('admin_users')} — +</h2>
               <button onClick={() => { setMostrarModal(false); setErrorModal(''); setExitoModal(''); }}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#78716C' }}>✕</button>
             </div>

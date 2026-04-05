@@ -1,7 +1,8 @@
-// HU-046 + HU-050 — Patient emotional history + clinical notes + AI summary
+// HU-046 + HU-050 — Patient emotional history + clinical notes + AI summary | DT-002 — i18n
 
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useLanguage } from '../../i18n/useLanguage'
 
 const API = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080'
 const getToken = () => localStorage.getItem('elevation_token') || ''
@@ -63,6 +64,7 @@ const NOTE_TYPE_COLOR: Record<string, { bg: string; color: string }> = {
 export function TherapistPatient() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { t } = useLanguage()
 
   const [patient,  setPatient]  = useState<Patient | null>(null)
   const [moodLogs, setMoodLogs] = useState<MoodLog[]>([])
@@ -201,7 +203,7 @@ export function TherapistPatient() {
           fontFamily: 'Inter, sans-serif', marginBottom: '1rem',
           display: 'flex', alignItems: 'center', gap: '0.35rem',
         }}>
-          ← Back to patients
+          ← {t('therapist_my_patients')}
         </button>
         <h1 style={{ fontFamily: 'Playfair Display, serif', fontWeight: 300, fontSize: '1.8rem', color: '#1C1917', margin: 0 }}>
           {patient.name}
@@ -214,10 +216,10 @@ export function TherapistPatient() {
       {/* SUMMARY CARDS */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
         {[
-          { label: 'Total sessions', value: moodLogs.length },
-          { label: 'Avg mood',       value: avgMood ?? '—' },
-          { label: 'Avg rating',     value: avgRating ? `${avgRating} ★` : '—' },
-          { label: 'Clinical notes', value: notes.length },
+          { label: t('admin_total_sessions'), value: moodLogs.length },
+          { label: t('therapist_avg_mood'),   value: avgMood ?? '—' },
+          { label: t('therapist_avg_rating'), value: avgRating ? `${avgRating} ★` : '—' },
+          { label: t('therapist_clinical_notes'), value: notes.length },
         ].map(card => (
           <div key={card.label} style={cardStyle}>
             <div style={{ fontSize: '1.5rem', fontWeight: 600, color: '#1C1917' }}>{card.value}</div>
@@ -232,7 +234,7 @@ export function TherapistPatient() {
       <div style={{ ...cardStyle, marginBottom: '1.25rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: aiSummary ? '1rem' : 0 }}>
           <div style={{ fontSize: '0.72rem', fontWeight: 600, color: '#78716C', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            AI Clinical Summary
+            {t('therapist_ai_summary')}
           </div>
           <button
             onClick={handleGenerateSummary}
@@ -265,7 +267,7 @@ export function TherapistPatient() {
       <div style={{ ...cardStyle, marginBottom: '1.25rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
           <h2 style={{ fontFamily: 'Playfair Display, serif', fontWeight: 400, fontSize: '1.1rem', color: '#1C1917', margin: 0 }}>
-            Clinical Notes
+            {t('therapist_clinical_notes')}
           </h2>
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
             <select style={selStyle} value={filterType} onChange={e => setFilterType(e.target.value)}>
@@ -325,7 +327,7 @@ export function TherapistPatient() {
                   fontSize: '0.78rem', fontWeight: 500,
                   cursor: savingNote ? 'not-allowed' : 'pointer', fontFamily: 'Inter, sans-serif',
                 }}>
-                {savingNote ? 'Saving...' : 'Save note'}
+                {savingNote ? 'Saving...' : t('therapist_save_note')}
               </button>
             </div>
           </div>
@@ -381,7 +383,7 @@ export function TherapistPatient() {
                           fontSize: '0.75rem', cursor: savingEdit ? 'not-allowed' : 'pointer',
                           fontFamily: 'Inter, sans-serif',
                         }}>
-                        {savingEdit ? 'Saving...' : 'Save'}
+                        {savingEdit ? 'Saving...' : t('therapist_save_note')}
                       </button>
                     </div>
                   </div>
@@ -400,7 +402,7 @@ export function TherapistPatient() {
         {/* MOOD HISTORY */}
         <div style={cardStyle}>
           <h2 style={{ fontFamily: 'Playfair Display, serif', fontWeight: 400, fontSize: '1.1rem', color: '#1C1917', margin: '0 0 1.25rem' }}>
-            Emotional history
+            {t('therapist_patient_history')}
           </h2>
           {moodLogs.length === 0 ? (
             <p style={{ color: '#78716C', fontSize: '0.875rem' }}>No mood logs yet.</p>
@@ -425,14 +427,6 @@ export function TherapistPatient() {
                         <div style={{ fontSize: '0.62rem', color: '#A8B5A2' }}>Check-out</div>
                       </div>
                     )}
-                    {log.checkin_mood != null && log.checkout_mood != null && (
-                      <span style={{
-                        fontSize: '0.72rem', fontWeight: 600,
-                        color: log.checkout_mood >= log.checkin_mood ? '#22C55E' : '#EF4444',
-                      }}>
-                        {log.checkout_mood >= log.checkin_mood ? '↑' : '↓'}
-                      </span>
-                    )}
                   </div>
                 </div>
               ))}
@@ -443,10 +437,10 @@ export function TherapistPatient() {
         {/* SESSION RATINGS */}
         <div style={cardStyle}>
           <h2 style={{ fontFamily: 'Playfair Display, serif', fontWeight: 400, fontSize: '1.1rem', color: '#1C1917', margin: '0 0 1.25rem' }}>
-            Session ratings
+            {t('therapist_sessions')}
           </h2>
           {ratings.length === 0 ? (
-            <p style={{ color: '#78716C', fontSize: '0.875rem' }}>No ratings yet.</p>
+            <p style={{ color: '#78716C', fontSize: '0.875rem' }}>No session ratings yet.</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
               {ratings.map(r => (
@@ -455,19 +449,15 @@ export function TherapistPatient() {
                   padding: '0.65rem 0.85rem', background: '#F5F3EF', borderRadius: '0.65rem',
                 }}>
                   <span style={{ fontSize: '0.78rem', color: '#78716C' }}>{formatDate(r.date)}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ fontSize: '0.9rem', letterSpacing: '0.05em' }}>
-                      {'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}
-                    </span>
-                    <span style={{ fontSize: '0.75rem', color: '#78716C' }}>
-                      {MOOD_LABEL[r.rating] ?? r.rating}
-                    </span>
-                  </div>
+                  <span style={{ fontSize: '0.875rem', color: '#1C1917' }}>
+                    {'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)} {r.rating}
+                  </span>
                 </div>
               ))}
             </div>
           )}
         </div>
+
       </div>
     </div>
   )
